@@ -141,7 +141,10 @@ class GContextLocal : public GDeferredContext {
   */
 
   bool Valid() {
-    return m_Bitmap;
+    bool ok = true;
+    ok = ok && static_cast<bool>(m_Bitmap);
+    ok = ok && static_cast<bool>(m_Bitmap->fPixels);
+    return ok;
   }
 
  private:
@@ -158,6 +161,16 @@ class GContextLocal : public GDeferredContext {
  *  If the new context cannot be created, return NULL.
  */
 GContext* GContext::Create(const GBitmap &bm) {
+  // If the context has no pixels defined, then there's no way this
+  // can be a valid context...
+  if(!bm.fPixels)
+    return NULL;
+
+  // Weird dimensions?
+  if(bm.fWidth <= 0 || bm.fHeight <= 0)
+    return NULL;
+
+  // Think we're ok then...
   return new GContextProxy(bm);
 }
 
@@ -167,10 +180,18 @@ GContext* GContext::Create(const GBitmap &bm) {
  *  If the new context cannot be created, return NULL.
  */
 GContext* GContext::Create(int width, int height) {
-  assert(width >= 0);
-  assert(height >= 0);
+  // Check for weird sizes...
+  if(width <= 0 || height <= 0)
+    return NULL;
+
+  // That's as weird as it gets... let's try to create
+  // the context...
   GContextLocal *ctx = new GContextLocal(width, height);
+
+  // Did it work?
   if(!ctx || !ctx->Valid())
     return NULL;
+
+  // Guess it did...
   return ctx;
 }
