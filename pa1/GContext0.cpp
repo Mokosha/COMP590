@@ -139,6 +139,11 @@ class GContextLocal : public GDeferredContext {
   GDeferredContext(const GDeferredContext &other) {
   }
   */
+
+  bool Valid() {
+    return m_Bitmap;
+  }
+
  private:
   virtual GBitmap *GetInternalBitmap() const {
     return m_Bitmap;
@@ -162,5 +167,10 @@ GContext* GContext::Create(const GBitmap &bm) {
  *  If the new context cannot be created, return NULL.
  */
 GContext* GContext::Create(int width, int height) {
-  return new GContextLocal(width, height);
+  assert(width >= 0);
+  assert(height >= 0);
+  GContextLocal *ctx = new GContextLocal(width, height);
+  if(!ctx || !ctx->Valid())
+    return NULL;
+  return ctx;
 }
