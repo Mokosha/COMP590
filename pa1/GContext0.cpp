@@ -2,9 +2,24 @@
 
 #include <cstring>
 #include <cassert>
+#include <algorithm>
 
 #include "GBitmap.h"
 #include "GColor.h"
+
+template<typename T>
+inline T Clamp(const T &v, const T &minVal, const T &maxVal) {
+  return ::std::max(::std::min(v, maxVal), minVal);
+}
+
+inline GColor ClampColor(const GColor &c) {
+  GColor r;
+  r.fA = Clamp(c.fA, 0.0f, 1.0f);
+  r.fR = Clamp(c.fR, 0.0f, 1.0f);
+  r.fG = Clamp(c.fG, 0.0f, 1.0f);
+  r.fB = Clamp(c.fB, 0.0f, 1.0f);
+  return r;
+}
 
 class GDeferredContext : public GContext {
  public:
@@ -12,7 +27,8 @@ class GDeferredContext : public GContext {
 
   virtual void getBitmap(GBitmap *bm) const {
     Flush();
-    memcpy(bm, GetInternalBitmap(), sizeof(*bm));
+    if(bm)
+      *bm = GetInternalBitmap();
   }
 
   virtual void clear(const GColor &c) {
@@ -26,7 +42,7 @@ class GDeferredContext : public GContext {
   }
 
  protected:
-  virtual GBitmap *GetInternalBitmap() const = 0;
+  virtual const GBitmap &GetInternalBitmap() const = 0;
 
  private:
   enum ECommand {
@@ -62,31 +78,31 @@ class GDeferredContext : public GContext {
   GColor m_ClearColor;
   void ClearOp() const {
     const GColor &c = m_ClearColor;
-    GBitmap *bitmap = GetInternalBitmap();
+    const GBitmap &bitmap = GetInternalBitmap();
 
-    const unsigned int h = bitmap->fHeight;
-    const unsigned int w = bitmap->fWidth;
+    const unsigned int h = bitmap.fHeight;
+    const unsigned int w = bitmap.fWidth;
 
-    const unsigned int rb = bitmap->fRowBytes;
-    unsigned char *pixels = reinterpret_cast<unsigned char *>(bitmap->fPixels);
+    const unsigned int rb = bitmap.fRowBytes;
+    unsigned char *pixels = reinterpret_cast<unsigned char *>(bitmap.fPixels);
+
+    // premultiply alpha ...
+    GColor dc = ClampColor(c);
+    dc.fR *= dc.fA;
+    dc.fG *= dc.fA;
+    dc.fB *= dc.fA;
+
+    GPixel clearValue =
+      (int((dc.fA * 255.0f) + 0.5f) << GPIXEL_SHIFT_A) |
+      (int((dc.fR * 255.0f) + 0.5f) << GPIXEL_SHIFT_R) |
+      (int((dc.fG * 255.0f) + 0.5f) << GPIXEL_SHIFT_G) |
+      (int((dc.fB * 255.0f) + 0.5f) << GPIXEL_SHIFT_B);
 
     for(unsigned int j = 0; j < h; j++) {
       for(unsigned int i = 0; i < w; i++) {
-        // premultiply alpha ...
-        GColor dc;
-        dc.fA = c.fA;
-        dc.fR = c.fR * c.fA;
-        dc.fG = c.fG * c.fA;
-        dc.fB = c.fB * c.fA;
-
         // Pack into a pixel
         const unsigned int offset = ((j * rb) + (i * sizeof(GPixel)));
-        GPixel &p = *(reinterpret_cast<GPixel *>(pixels + offset));
-        p =
-          (int((dc.fA * 255.0f) + 0.5f) << GPIXEL_SHIFT_A) |
-          (int((dc.fR * 255.0f) + 0.5f) << GPIXEL_SHIFT_R) |
-          (int((dc.fG * 255.0f) + 0.5f) << GPIXEL_SHIFT_G) |
-          (int((dc.fB * 255.0f) + 0.5f) << GPIXEL_SHIFT_B);
+        *(reinterpret_cast<GPixel *>(pixels + offset)) = clearValue;
       }
     }
   }
@@ -94,14 +110,9 @@ class GDeferredContext : public GContext {
 
 class GContextProxy : public GDeferredContext {
  public:
-  GContextProxy(const GBitmap &bm)
-    : GDeferredContext(), m_Bitmap(new GBitmap) {
-    memcpy(m_Bitmap, &bm, sizeof(GBitmap));
-  }
+  GContextProxy(const GBitmap &bm): GDeferredContext(), m_Bitmap(bm) { }
 
-  virtual ~GContextProxy() {
-    delete m_Bitmap;
-  }
+  virtual ~GContextProxy() { }
 
   virtual void clear(const GColor &c) {
     m_ClearColor = c;
@@ -109,50 +120,44 @@ class GContextProxy : public GDeferredContext {
   }
 
  private:
-  virtual GBitmap *GetInternalBitmap() const {
+  virtual const GBitmap &GetInternalBitmap() const {
     return m_Bitmap;
   };
 
-  GBitmap *m_Bitmap;
+  GBitmap m_Bitmap;
 };
 
 class GContextLocal : public GDeferredContext {
  public:
   GContextLocal(int width, int height)
-    : GDeferredContext(), m_Bitmap(new GBitmap) {
-    m_Bitmap->fWidth = width;
-    m_Bitmap->fHeight = height;
-    m_Bitmap->fPixels = new GPixel[width * height];
-    m_Bitmap->fRowBytes = width * sizeof(GPixel);
+    : GDeferredContext() {
+    m_Bitmap.fWidth = width;
+    m_Bitmap.fHeight = height;
+    m_Bitmap.fPixels = new GPixel[width * height];
+    m_Bitmap.fRowBytes = width * sizeof(GPixel);
   }
 
   virtual ~GContextLocal() {
-    delete [] m_Bitmap->fPixels;
-    delete m_Bitmap;
+    delete [] m_Bitmap.fPixels;
   }
   
-  // !FIXME! What do we do here? Reference count the bitmap?
-  /* 
-  const GDeferredContext &operator=(const GDeferredContext &other) {
+  virtual void clear(const GColor &c) {
+    m_ClearColor = c;
+    ClearOp();
   }
-
-  GDeferredContext(const GDeferredContext &other) {
-  }
-  */
 
   bool Valid() {
     bool ok = true;
-    ok = ok && static_cast<bool>(m_Bitmap);
-    ok = ok && static_cast<bool>(m_Bitmap->fPixels);
+    ok = ok && static_cast<bool>(m_Bitmap.fPixels);
     return ok;
   }
 
  private:
-  virtual GBitmap *GetInternalBitmap() const {
+  virtual const GBitmap &GetInternalBitmap() const {
     return m_Bitmap;
   };
 
-  GBitmap *m_Bitmap;
+  GBitmap m_Bitmap;
 };
 
 /**
@@ -168,6 +173,16 @@ GContext* GContext::Create(const GBitmap &bm) {
 
   // Weird dimensions?
   if(bm.fWidth <= 0 || bm.fHeight <= 0)
+    return NULL;
+
+  // Is our rowbytes less than a sane number of bytes we need for the width
+  // that's specified?
+  if(bm.fRowBytes < bm.fWidth * sizeof(GPixel))
+    return NULL;
+
+  // Is our rowbytes word aligned?
+  // FIXME: I'm not totally sure this check needs to be made...
+  if(static_cast<unsigned int>(bm.fRowBytes) % sizeof(unsigned int))
     return NULL;
 
   // Think we're ok then...
