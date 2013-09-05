@@ -5,27 +5,31 @@
 #include "GColor.h"
 
 int main(int argc, char** argv) {
-    GPixel storage[100 * 100];
-    GBitmap bitmap;
-    bitmap.fWidth = 100;
-    bitmap.fHeight = 100;
-    bitmap.fPixels = storage;
-    bitmap.fRowBytes = bitmap.fWidth * sizeof(GPixel);
-
-    GContext* ctx = GContext::Create(bitmap);
+    const int W = 100;
+    const int H = 100;
+    GContext* ctx = GContext::Create(W, H);
     if (!ctx) {
         fprintf(stderr, "GContext::Create failed\n");
         return -1;
     }
     
-    const GPixel pixel = 0xFFFF0000;
     const GColor color = { 1, 1, 0, 0 };
+    const GPixel pixel = 0xFFFF0000;
     
     ctx->clear(color);
 
-    for (int y = 0; y < 100; ++y) {
-        for (int x = 0; x < 100; ++x) {
-            const GPixel value = storage[y * 100 + x];
+    GBitmap bitmap;
+    ctx->getBitmap(&bitmap);
+
+    if (W != bitmap.fWidth || H != bitmap.fHeight) {
+        fprintf(stderr, "unexpected width/height [%d %d]\n", bitmap.fWidth, bitmap.fHeight);
+        return -1;
+    }
+
+    for (int y = 0; y < W; ++y) {
+        const char* row = (const char*)bitmap.fPixels + bitmap.fRowBytes * y;
+        for (int x = 0; x < H; ++x) {
+            const GPixel value = ((const GPixel*)row)[x];
             if (pixel != value) {
                 fprintf(stderr, "at (%d, %d) expected %x but got %x\n",
                         x, y, pixel, value);
