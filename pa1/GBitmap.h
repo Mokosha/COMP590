@@ -9,11 +9,12 @@
 
 #include "GPixel.h"
 
-struct GBitmap {
-    int     fWidth;
-    int     fHeight;
-    GPixel* fPixels;
-    size_t  fRowBytes;
+class GBitmap {
+public:
+    int     fWidth;     // number of pixels in a row
+    int     fHeight;    // number of rows of pixels
+    GPixel* fPixels;    // address of first (top) row of pixels
+    size_t  fRowBytes;  // number of bytes between rows of pixels
 };
 
 #endif

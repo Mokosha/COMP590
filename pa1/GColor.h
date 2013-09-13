@@ -9,7 +9,12 @@
 
 #include "GTypes.h"
 
-struct GColor {
+/**
+ *  Holds a nonpremultiplied color, with each component
+ *  normalized to [0...1].
+ */
+class GColor {
+public:
     float   fA, fR, fG, fB;
 };
 

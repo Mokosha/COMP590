@@ -18,7 +18,10 @@ public:
     virtual ~GContext() {}
 
     /**
-     *  Return the information about the context's bitmap.
+     *  Copy information about the context's backend into the provided
+     *  bitmap. Ownership of the pixel memory is not affected by this call,
+     *  though the returned pixel address will remain valid for the lifetime
+     *  of the context.
      */
     virtual void getBitmap(GBitmap*) const = 0;
 
