@@ -98,11 +98,17 @@ class GDeferredContext : public GContext {
       (int((dc.fG * 255.0f) + 0.5f) << GPIXEL_SHIFT_G) |
       (int((dc.fB * 255.0f) + 0.5f) << GPIXEL_SHIFT_B);
 
-    for(unsigned int j = 0; j < h; j++) {
-      for(unsigned int i = 0; i < w; i++) {
-        // Pack into a pixel
-        const unsigned int offset = ((j * rb) + (i * sizeof(GPixel)));
-        *(reinterpret_cast<GPixel *>(pixels + offset)) = clearValue;
+    if(rb == w * sizeof(GPixel)) {
+      for(unsigned int i = 0; i < w*h; i++) {
+	*(bitmap.fPixels + i) = clearValue;
+      }
+    } else {
+      for(unsigned int j = 0; j < h; j++) {
+	for(unsigned int i = 0; i < w; i++) {
+	  // Pack into a pixel
+	  const unsigned int offset = ((j * rb) + (i * sizeof(GPixel)));
+	  *(reinterpret_cast<GPixel *>(pixels + offset)) = clearValue;
+	}
       }
     }
   }
