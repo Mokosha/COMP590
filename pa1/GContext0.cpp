@@ -100,15 +100,15 @@ class GDeferredContext : public GContext {
 
     if(rb == w * sizeof(GPixel)) {
       for(unsigned int i = 0; i < w*h; i++) {
-	*(bitmap.fPixels + i) = clearValue;
+        *(bitmap.fPixels + i) = clearValue;
       }
     } else {
       for(unsigned int j = 0; j < h; j++) {
-	for(unsigned int i = 0; i < w; i++) {
-	  // Pack into a pixel
-	  const unsigned int offset = ((j * rb) + (i * sizeof(GPixel)));
-	  *(reinterpret_cast<GPixel *>(pixels + offset)) = clearValue;
-	}
+        for(unsigned int i = 0; i < w; i++) {
+          // Pack into a pixel
+          const unsigned int offset = ((j * rb) + (i * sizeof(GPixel)));
+          *(reinterpret_cast<GPixel *>(pixels + offset)) = clearValue;
+        }
       }
     }
   }
