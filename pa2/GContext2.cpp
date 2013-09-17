@@ -1,0 +1,245 @@
+#include "GContext.h"
+
+#include <cstring>
+#include <cassert>
+#include <algorithm>
+
+#include "GBitmap.h"
+#include "GColor.h"
+#include "GIRect.h"
+
+template<typename T>
+inline T Clamp(const T &v, const T &minVal, const T &maxVal) {
+  return ::std::max(::std::min(v, maxVal), minVal);
+}
+
+inline GColor ClampColor(const GColor &c) {
+  GColor r;
+  r.fA = Clamp(c.fA, 0.0f, 1.0f);
+  r.fR = Clamp(c.fR, 0.0f, 1.0f);
+  r.fG = Clamp(c.fG, 0.0f, 1.0f);
+  r.fB = Clamp(c.fB, 0.0f, 1.0f);
+  return r;
+}
+
+class GDeferredContext : public GContext {
+ public:
+  GDeferredContext() { }
+
+  virtual void getBitmap(GBitmap *bm) const {
+    if(bm)
+      *bm = GetInternalBitmap();
+  }
+
+  virtual void clear(const GColor &c) {
+    const GBitmap &bm = GetInternalBitmap();
+    GIRect rect = GIRect::MakeWH(bm.fWidth, bm.fHeight);
+    fillIRect(rect, c, eBlendOp_Src);
+  }
+
+  virtual void fillIRect(const GIRect &rect, const GColor &c) {
+    fillIRect(rect, c, eBlendOp_SrcOver);
+  }
+
+ protected:
+  virtual const GBitmap &GetInternalBitmap() const = 0;
+
+  enum EBlendOp {
+    eBlendOp_SrcOver,
+    eBlendOp_Src
+  };
+
+  static void memsetPixel(GPixel *pxs, GPixel v, uint32_t count) {
+    for(uint32_t i = 0; i < count; i++) {
+      pxs[i] = v;
+    }
+  }
+
+  static uint32_t fixed_multiply(uint32_t a, uint32_t b) {
+    return (a * b) / 255;
+  }
+
+  static GPixel blend_srcover(GPixel dst, GPixel src) {
+    uint32_t srcA = (src >> GPIXEL_SHIFT_A) & 0xFF;
+    uint32_t dstA = (dst >> GPIXEL_SHIFT_A) & 0xFF;
+
+    uint32_t resA = srcA + fixed_multiply(dstA, 255 - srcA);
+
+    uint32_t srcR = (src >> GPIXEL_SHIFT_R) & 0xFF;
+    uint32_t dstR = (dst >> GPIXEL_SHIFT_R) & 0xFF;
+    uint32_t srcG = (src >> GPIXEL_SHIFT_G) & 0xFF;
+    uint32_t dstG = (dst >> GPIXEL_SHIFT_G) & 0xFF;
+    uint32_t srcB = (src >> GPIXEL_SHIFT_B) & 0xFF;
+    uint32_t dstB = (dst >> GPIXEL_SHIFT_B) & 0xFF;
+
+    return (resA << GPIXEL_SHIFT_A) |
+      ((srcR + fixed_multiply(dstR, 255 - srcA)) << GPIXEL_SHIFT_R) |
+      ((srcG + fixed_multiply(dstG, 255 - srcA)) << GPIXEL_SHIFT_G) |
+      ((srcB + fixed_multiply(dstB, 255 - srcA)) << GPIXEL_SHIFT_B);
+  }
+
+  static GPixel blend(GPixel &dst, GPixel src, EBlendOp op) {
+    switch(op) {
+      case eBlendOp_Src: return src;
+      case eBlendOp_SrcOver: return blend_srcover(dst, src);
+    }
+  }
+
+  static GIRect IntersectRect(const GIRect &a, const GIRect &b) {
+    return GIRect::MakeLTRB(
+      std::max(a.fLeft, b.fLeft),
+      std::max(a.fTop, b.fTop),
+      std::min(a.fRight, b.fRight),
+      std::min(a.fBottom, b.fBottom)
+    );
+  }
+
+  void fillIRect(const GIRect &rect, const GColor &c, EBlendOp op) {
+
+    const GBitmap &bitmap = GetInternalBitmap();
+
+    uint32_t h = bitmap.fHeight;
+    uint32_t w = bitmap.fWidth;
+
+    GIRect bmRect = IntersectRect(rect, GIRect::MakeWH(w, h));
+    if(bmRect.isEmpty())
+      return;
+
+    h = bmRect.height();
+    w = bmRect.width();
+
+    unsigned char *pixels = reinterpret_cast<unsigned char *>(bitmap.fPixels);
+
+    // premultiply alpha ...
+    GColor dc = ClampColor(c);
+    dc.fR *= dc.fA;
+    dc.fG *= dc.fA;
+    dc.fB *= dc.fA;
+
+    GPixel clearValue =
+      (int((dc.fA * 255.0f) + 0.5f) << GPIXEL_SHIFT_A) |
+      (int((dc.fR * 255.0f) + 0.5f) << GPIXEL_SHIFT_R) |
+      (int((dc.fG * 255.0f) + 0.5f) << GPIXEL_SHIFT_G) |
+      (int((dc.fB * 255.0f) + 0.5f) << GPIXEL_SHIFT_B);
+
+    if(bitmap.fRowBytes == w * sizeof(GPixel)) {
+      GPixel *p = bitmap.fPixels + bmRect.fTop*bitmap.fWidth + bmRect.fLeft;
+      if(op == eBlendOp_Src) {
+        memsetPixel(p, clearValue, w*h);
+      } else {
+        GPixel *end = bitmap.fPixels + ((bmRect.fBottom - 1) * w + bmRect.fRight);
+        for(; p != end; p++) {
+          *p = blend(*p, clearValue, op);
+        }        
+      }
+    } else {
+      for(uint32_t j = bmRect.fTop; j < bmRect.fBottom; j++) {
+        const uint32_t offset = (j * bitmap.fRowBytes);
+        if(op == eBlendOp_Src) {
+          GPixel *p = reinterpret_cast<GPixel *>(pixels + offset);
+          memsetPixel(p, clearValue, w);
+        } else {
+          for(uint32_t i = bmRect.fLeft; i < bmRect.fRight; i++) {
+            // Pack into a pixel
+            const uint32_t final_offset = offset + (i * sizeof(GPixel));
+            GPixel &p = *(reinterpret_cast<GPixel *>(pixels + final_offset));
+            p = blend(p, clearValue, op);
+          }
+        }
+      }
+    }
+  }
+};
+
+class GContextProxy : public GDeferredContext {
+ public:
+  GContextProxy(const GBitmap &bm): GDeferredContext(), m_Bitmap(bm) { }
+
+  virtual ~GContextProxy() { }
+
+ private:
+  virtual const GBitmap &GetInternalBitmap() const {
+    return m_Bitmap;
+  };
+
+  GBitmap m_Bitmap;
+};
+
+class GContextLocal : public GDeferredContext {
+ public:
+  GContextLocal(int width, int height)
+    : GDeferredContext() {
+    m_Bitmap.fWidth = width;
+    m_Bitmap.fHeight = height;
+    m_Bitmap.fPixels = new GPixel[width * height];
+    m_Bitmap.fRowBytes = width * sizeof(GPixel);
+  }
+
+  virtual ~GContextLocal() {
+    delete [] m_Bitmap.fPixels;
+  }
+
+  bool Valid() {
+    bool ok = true;
+    ok = ok && static_cast<bool>(m_Bitmap.fPixels);
+    return ok;
+  }
+
+ private:
+  virtual const GBitmap &GetInternalBitmap() const {
+    return m_Bitmap;
+  };
+
+  GBitmap m_Bitmap;
+};
+
+/**
+ *  Create a new context that will draw into the specified bitmap. The
+ *  caller is responsible for managing the lifetime of the pixel memory.
+ *  If the new context cannot be created, return NULL.
+ */
+GContext* GContext::Create(const GBitmap &bm) {
+  // If the context has no pixels defined, then there's no way this
+  // can be a valid context...
+  if(!bm.fPixels)
+    return NULL;
+
+  // Weird dimensions?
+  if(bm.fWidth <= 0 || bm.fHeight <= 0)
+    return NULL;
+
+  // Is our rowbytes less than a sane number of bytes we need for the width
+  // that's specified?
+  if(bm.fRowBytes < bm.fWidth * sizeof(GPixel))
+    return NULL;
+
+  // Is our rowbytes word aligned?
+  // FIXME: I'm not totally sure this check needs to be made...
+  if(static_cast<uint32_t>(bm.fRowBytes) % sizeof(GPixel))
+    return NULL;
+
+  // Think we're ok then...
+  return new GContextProxy(bm);
+}
+
+/**
+ *  Create a new context is sized to match the requested dimensions. The
+ *  context is responsible for managing the lifetime of the pixel memory.
+ *  If the new context cannot be created, return NULL.
+ */
+GContext* GContext::Create(int width, int height) {
+  // Check for weird sizes...
+  if(width <= 0 || height <= 0)
+    return NULL;
+
+  // That's as weird as it gets... let's try to create
+  // the context...
+  GContextLocal *ctx = new GContextLocal(width, height);
+
+  // Did it work?
+  if(!ctx || !ctx->Valid())
+    return NULL;
+
+  // Guess it did...
+  return ctx;
+}
