@@ -34,7 +34,7 @@ public:
     /**
      *  Fill the specified rectangle with the specified color, blending using
      *  SRC_OVER mode. If the rectangle is inverted (e.g. width or height < 0)
-     *  then nothing is drawn.
+     *  or empty, then nothing is drawn.
      */
     virtual void fillIRect(const GIRect&, const GColor&) = 0;
 

@@ -14,7 +14,7 @@
 #include <stdlib.h>
 
 static bool gVerbose;
-static bool gRepeatCount = 1;
+static int gRepeatCount = 1;
 
 static double time_erase(GContext* ctx, const GColor& color) {
     GBitmap bm;
@@ -72,7 +72,7 @@ static void clear_bench() {
 
 static double time_rect(GContext* ctx, const GIRect& rect, const GColor& color) {
     int loop = 10 * 1000 * gRepeatCount;
-
+    
     GMSec before = GTime::GetMSec();
     for (int i = 0; i < loop; ++i) {
         ctx->fillIRect(rect, color);
@@ -119,7 +119,8 @@ static void rect_bench() {
 typedef void (*BenchProc)();
 
 static const BenchProc gBenches[] = {
-    clear_bench, rect_bench,
+    clear_bench,
+    rect_bench,
 };
 
 int main(int argc, char** argv) {
