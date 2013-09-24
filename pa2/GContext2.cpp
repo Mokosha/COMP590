@@ -49,9 +49,9 @@ class GDeferredContext : public GContext {
     eBlendOp_Src
   };
 
-  static void memsetPixel(GPixel *pxs, GPixel v, uint32_t count) {
+  static void memsetPixel(GPixel *dst, GPixel v, uint32_t count) {
     for(uint32_t i = 0; i < count; i++) {
-      pxs[i] = v;
+      dst[i] = v;
     }
   }
 
@@ -60,28 +60,33 @@ class GDeferredContext : public GContext {
   }
 
   static GPixel blend_srcover(GPixel dst, GPixel src) {
-    uint32_t srcA = (src >> GPIXEL_SHIFT_A) & 0xFF;
-    uint32_t dstA = (dst >> GPIXEL_SHIFT_A) & 0xFF;
+    uint32_t srcA = GPixel_GetA(src);
+    uint32_t dstA = GPixel_GetA(dst);
 
     uint32_t resA = srcA + fixed_multiply(dstA, 255 - srcA);
 
-    uint32_t srcR = (src >> GPIXEL_SHIFT_R) & 0xFF;
-    uint32_t dstR = (dst >> GPIXEL_SHIFT_R) & 0xFF;
-    uint32_t srcG = (src >> GPIXEL_SHIFT_G) & 0xFF;
-    uint32_t dstG = (dst >> GPIXEL_SHIFT_G) & 0xFF;
-    uint32_t srcB = (src >> GPIXEL_SHIFT_B) & 0xFF;
-    uint32_t dstB = (dst >> GPIXEL_SHIFT_B) & 0xFF;
+    uint32_t srcR = GPixel_GetR(src);
+    uint32_t dstR = GPixel_GetR(dst);
+    uint32_t srcG = GPixel_GetG(src);
+    uint32_t dstG = GPixel_GetG(dst);
+    uint32_t srcB = GPixel_GetB(src);
+    uint32_t dstB = GPixel_GetB(dst);
 
-    return (resA << GPIXEL_SHIFT_A) |
-      ((srcR + fixed_multiply(dstR, 255 - srcA)) << GPIXEL_SHIFT_R) |
-      ((srcG + fixed_multiply(dstG, 255 - srcA)) << GPIXEL_SHIFT_G) |
-      ((srcB + fixed_multiply(dstB, 255 - srcA)) << GPIXEL_SHIFT_B);
+    return GPixel_PackARGB(resA,
+                           srcR + fixed_multiply(dstR, 255 - srcA),
+                           srcG + fixed_multiply(dstG, 255 - srcA),
+                           srcB + fixed_multiply(dstB, 255 - srcA));
   }
 
   static GPixel blend(GPixel &dst, GPixel src, EBlendOp op) {
     switch(op) {
       case eBlendOp_Src: return src;
-      case eBlendOp_SrcOver: return blend_srcover(dst, src);
+      case eBlendOp_SrcOver:
+        if(GPixel_GetA(src) == 255) {
+          return src;
+        } else {
+          return blend_srcover(dst, src);
+        }
     }
   }
 
@@ -116,11 +121,10 @@ class GDeferredContext : public GContext {
     dc.fG *= dc.fA;
     dc.fB *= dc.fA;
 
-    GPixel clearValue =
-      (int((dc.fA * 255.0f) + 0.5f) << GPIXEL_SHIFT_A) |
-      (int((dc.fR * 255.0f) + 0.5f) << GPIXEL_SHIFT_R) |
-      (int((dc.fG * 255.0f) + 0.5f) << GPIXEL_SHIFT_G) |
-      (int((dc.fB * 255.0f) + 0.5f) << GPIXEL_SHIFT_B);
+    GPixel clearValue = GPixel_PackARGB(static_cast<unsigned>((dc.fA * 255.0f) + 0.5f),
+                                        static_cast<unsigned>((dc.fR * 255.0f) + 0.5f),
+                                        static_cast<unsigned>((dc.fG * 255.0f) + 0.5f),
+                                        static_cast<unsigned>((dc.fB * 255.0f) + 0.5f));
 
     if(bitmap.fRowBytes == w * sizeof(GPixel)) {
       GPixel *p = bitmap.fPixels + bmRect.fTop*bitmap.fWidth + bmRect.fLeft;
