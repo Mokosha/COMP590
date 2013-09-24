@@ -128,30 +128,42 @@ class GDeferredContext : public GContext {
 
     if(bitmap.fRowBytes == w * sizeof(GPixel)) {
       GPixel *p = bitmap.fPixels + bmRect.fTop*bitmap.fWidth + bmRect.fLeft;
-      if(op == eBlendOp_Src) {
-        memsetPixel(p, clearValue, w*h);
-      } else {
-        GPixel *end = bitmap.fPixels + ((bmRect.fBottom - 1) * w + bmRect.fRight);
-        for(; p != end; p++) {
-          *p = blend(*p, clearValue, op);
-        }        
+      switch(op) {
+        case eBlendOp_Src:
+          memsetPixel(p, clearValue, w*h);
+          break;
+
+        default: {
+          GPixel *end = bitmap.fPixels + ((bmRect.fBottom - 1) * w + bmRect.fRight);
+          for(; p != end; p++) {
+            *p = blend(*p, clearValue, op);
+          }
+          break;
+        }
       }
+
     } else {
       for(uint32_t j = bmRect.fTop; j < bmRect.fBottom; j++) {
         const uint32_t offset = (j * bitmap.fRowBytes);
-        if(op == eBlendOp_Src) {
-          GPixel *p = reinterpret_cast<GPixel *>(pixels + offset);
-          memsetPixel(p, clearValue, w);
-        } else {
-          for(uint32_t i = bmRect.fLeft; i < bmRect.fRight; i++) {
-            // Pack into a pixel
-            const uint32_t final_offset = offset + (i * sizeof(GPixel));
-            GPixel &p = *(reinterpret_cast<GPixel *>(pixels + final_offset));
-            p = blend(p, clearValue, op);
+
+        switch(op) {
+          case eBlendOp_Src: {
+            GPixel *p = reinterpret_cast<GPixel *>(pixels + offset);
+            memsetPixel(p, clearValue, w);
+            break;
           }
-        }
-      }
-    }
+
+          default: {
+            for(uint32_t i = bmRect.fLeft; i < bmRect.fRight; i++) {
+              const uint32_t final_offset = offset + (i * sizeof(GPixel));
+              GPixel &p = *(reinterpret_cast<GPixel *>(pixels + final_offset));
+              p = blend(p, clearValue, op);
+            }
+            break;
+          }
+        }  // switch
+      }  // for
+    }  // else
   }
 };
 
@@ -241,8 +253,11 @@ GContext* GContext::Create(int width, int height) {
   GContextLocal *ctx = new GContextLocal(width, height);
 
   // Did it work?
-  if(!ctx || !ctx->Valid())
+  if(!ctx || !ctx->Valid()) {
+    if(ctx)
+      delete ctx;
     return NULL;
+  }
 
   // Guess it did...
   return ctx;
