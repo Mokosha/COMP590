@@ -56,7 +56,7 @@ class GDeferredContext : public GContext {
   }
 
   static uint32_t fixed_multiply(uint32_t a, uint32_t b) {
-    return (a * b) / 255;
+    return (a * b + 128) / 255;
   }
 
   static GPixel blend_srcover(GPixel dst, GPixel src) {
