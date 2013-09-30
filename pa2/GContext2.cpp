@@ -154,10 +154,18 @@ class GDeferredContext : public GContext {
           }
 
           default: {
-            for(uint32_t i = bmRect.fLeft; i < bmRect.fRight; i++) {
-              const uint32_t final_offset = offset + (i * sizeof(GPixel));
-              GPixel &p = *(reinterpret_cast<GPixel *>(pixels + final_offset));
-              p = blend(p, clearValue, op);
+            GPixel *rowPixels = reinterpret_cast<GPixel *>(pixels + offset);
+            GPixel oldP = rowPixels[0];
+            GPixel newP = blend(oldP, clearValue, op);
+            rowPixels[0] = newP;
+
+            for(uint32_t i = bmRect.fLeft + 1; i < bmRect.fRight; i++) {
+              if(oldP == rowPixels[i]) {
+                rowPixels[i] = newP;
+              } else {
+                oldP = rowPixels[i];
+                newP = rowPixels[i] = blend(rowPixels[i], clearValue, op);
+              }
             }
             break;
           }

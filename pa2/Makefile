@@ -7,7 +7,7 @@ CC_RELEASE = $(CC) -O3 -DNDEBUG
 #
 PNG_INC = -I/opt/local/include -L/opt/local/lib
 
-all: test bench image
+all: test bench image xapp
 
 test : test.cpp GContext2.cpp
 	$(CC_DEBUG) test.cpp GContext2.cpp -o test
