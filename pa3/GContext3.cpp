@@ -56,23 +56,21 @@ class GDeferredContext : public GContext {
   }
 
   static uint32_t fixed_multiply(uint32_t a, uint32_t b) {
-    return (a * b + 128) / 255;
+    return (a * b + 127) / 255;
   }
 
   static GPixel blend_srcover(GPixel dst, GPixel src) {
     uint32_t srcA = GPixel_GetA(src);
-    uint32_t dstA = GPixel_GetA(dst);
-
-    uint32_t resA = srcA + fixed_multiply(dstA, 255 - srcA);
-
     uint32_t srcR = GPixel_GetR(src);
-    uint32_t dstR = GPixel_GetR(dst);
     uint32_t srcG = GPixel_GetG(src);
-    uint32_t dstG = GPixel_GetG(dst);
     uint32_t srcB = GPixel_GetB(src);
+
+    uint32_t dstA = GPixel_GetA(dst);
+    uint32_t dstR = GPixel_GetR(dst);
+    uint32_t dstG = GPixel_GetG(dst);
     uint32_t dstB = GPixel_GetB(dst);
 
-    return GPixel_PackARGB(resA,
+    return GPixel_PackARGB(srcA + fixed_multiply(dstA, 255 - srcA),
                            srcR + fixed_multiply(dstR, 255 - srcA),
                            srcG + fixed_multiply(dstG, 255 - srcA),
                            srcB + fixed_multiply(dstB, 255 - srcA));
@@ -126,15 +124,15 @@ class GDeferredContext : public GContext {
         }
       }
     } else {
-      const uint8_t alphaVal = static_cast<uint8_t>(alpha * 255.0f);
+      const uint32_t alphaVal = static_cast<uint32_t>((alpha * 255.0f));
       for(uint32_t j = 0; j < h; j++) {
         GPixel *srcRow = GetRowOffset(bm, j);
         GPixel *dstRow = GetRowOffset(ctxbm, j+y) + x;
         for(uint32_t i = 0; i < w; i++) {
-          uint8_t srcA = fixed_multiply(GPixel_GetA(srcRow[i]), alphaVal);
-          uint8_t srcR = fixed_multiply(GPixel_GetR(srcRow[i]), alphaVal);
-          uint8_t srcG = fixed_multiply(GPixel_GetG(srcRow[i]), alphaVal);
-          uint8_t srcB = fixed_multiply(GPixel_GetB(srcRow[i]), alphaVal);
+          uint32_t srcA = fixed_multiply(GPixel_GetA(srcRow[i]), alphaVal);
+          uint32_t srcR = fixed_multiply(GPixel_GetR(srcRow[i]), alphaVal);
+          uint32_t srcG = fixed_multiply(GPixel_GetG(srcRow[i]), alphaVal);
+          uint32_t srcB = fixed_multiply(GPixel_GetB(srcRow[i]), alphaVal);
           GPixel src = GPixel_PackARGB(srcA, srcR, srcG, srcB);
           dstRow[i] = blend(dstRow[i], src, eBlendOp_SrcOver);
         }
@@ -186,8 +184,9 @@ class GDeferredContext : public GContext {
       }
 
     } else {
+      
       for(uint32_t j = bmRect.fTop; j < bmRect.fBottom; j++) {
-        const uint32_t offset = (j * bitmap.fRowBytes);
+        const uint32_t offset = (j * bitmap.fRowBytes) + bmRect.fLeft*sizeof(GPixel);
 
         switch(op) {
           case eBlendOp_Src: {
@@ -201,8 +200,8 @@ class GDeferredContext : public GContext {
             GPixel oldP = rowPixels[0];
             GPixel newP = blend(oldP, clearValue, op);
             rowPixels[0] = newP;
-
-            for(uint32_t i = bmRect.fLeft + 1; i < bmRect.fRight; i++) {
+            
+            for(uint32_t i = 1; i < w; i++) {
               if(oldP == rowPixels[i]) {
                 rowPixels[i] = newP;
               } else {
