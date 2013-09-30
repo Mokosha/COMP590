@@ -118,16 +118,16 @@ class GDeferredContext : public GContext {
     if(alpha >= (254.5f / 255.0f)) {
       for(uint32_t j = 0; j < h; j++) {
         GPixel *srcRow = GetRowOffset(bm, j);
-        GPixel *dstRow = GetRowOffset(ctxbm, j+y) + x;
+        GPixel *dstRow = GetRowOffset(ctxbm, j+rect.fTop) + rect.fLeft;
         for(uint32_t i = 0; i < w; i++) {
           dstRow[i] = blend(dstRow[i], srcRow[i], eBlendOp_SrcOver);
         }
       }
     } else {
-      const uint32_t alphaVal = static_cast<uint32_t>((alpha * 255.0f));
+      const uint32_t alphaVal = static_cast<uint32_t>((alpha * 255.0f) + 0.5f);
       for(uint32_t j = 0; j < h; j++) {
         GPixel *srcRow = GetRowOffset(bm, j);
-        GPixel *dstRow = GetRowOffset(ctxbm, j+y) + x;
+        GPixel *dstRow = GetRowOffset(ctxbm, j+rect.fTop) + rect.fLeft;
         for(uint32_t i = 0; i < w; i++) {
           uint32_t srcA = fixed_multiply(GPixel_GetA(srcRow[i]), alphaVal);
           uint32_t srcR = fixed_multiply(GPixel_GetR(srcRow[i]), alphaVal);
@@ -153,8 +153,6 @@ class GDeferredContext : public GContext {
 
     h = bmRect.height();
     w = bmRect.width();
-
-    unsigned char *pixels = reinterpret_cast<unsigned char *>(bitmap.fPixels);
 
     // premultiply alpha ...
     GColor dc = ClampColor(c);
@@ -186,17 +184,15 @@ class GDeferredContext : public GContext {
     } else {
       
       for(uint32_t j = bmRect.fTop; j < bmRect.fBottom; j++) {
-        const uint32_t offset = (j * bitmap.fRowBytes) + bmRect.fLeft*sizeof(GPixel);
+        GPixel *rowPixels = GetRowOffset(bitmap, j) + bmRect.fLeft;
 
         switch(op) {
           case eBlendOp_Src: {
-            GPixel *p = reinterpret_cast<GPixel *>(pixels + offset);
-            memsetPixel(p, clearValue, w);
+            memsetPixel(rowPixels, clearValue, w);
             break;
           }
 
           default: {
-            GPixel *rowPixels = reinterpret_cast<GPixel *>(pixels + offset);
             GPixel oldP = rowPixels[0];
             GPixel newP = blend(oldP, clearValue, op);
             rowPixels[0] = newP;
