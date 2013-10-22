@@ -5,336 +5,11 @@
 #include <algorithm>
 #include <vector>
 
+#include "GMatrix.h"
 #include "GBitmap.h"
 #include "GPaint.h"
 #include "GColor.h"
 #include "GRect.h"
-
-template <typename T, const int N>
-class GVector {
- protected:
-
-  // Vector representation
-  T vec[N];
-
- public:
-    
-  GVector() { }
-  GVector(const GVector<T, N> &other) {
-    for(int i = 0; i < N; i++) vec[i] = other[i];
-  }
-
-  GVector(T *_vec) {
-    for(int i = 0; i < N; i++) {
-      vec[i] = _vec[i];
-    }
-  }
-
-  // Accessors
-  T &operator()(int idx) { return vec[idx]; }
-  T &operator[](int idx) { return vec[idx]; }
-  const T &operator()(int idx) const { return vec[idx]; }
-  const T &operator[](int idx) const { return vec[idx]; }
-
-  // Allow casts to the respective array representation...
-  operator T *() const { return vec; }
-  GVector<T, N> &operator=(const T *v) {
-    for(int i = 0; i < N; i++) vec[i] = v[i];
-    return *this;
-  }
-
-  // Allows casting to other vector types if the underlying type system does as well...
-  template<typename _T>
-  operator GVector<_T, N>() const { 
-    return GVector<_T, N>(vec); 
-  }
-
-  // Operators
-  template<typename _T>
-  GVector<T, N> operator+(const GVector<_T, N> &v) const {
-    GVector a;
-    for(int i = 0; i < N; i++) {
-      a.vec[i] = v(i) + vec[i];
-    }
-    return a;
-  }
-
-  template<typename _T>
-  GVector<T, N> &operator+=(const GVector<_T, N> &v) const {
-    for(int i = 0; i < N; i++) {
-      vec[i] += v(i);
-    }
-    return *this;
-  }
-
-  template<typename _T>
-  GVector<T, N> operator-(const GVector<_T, N> &v) const {
-    GVector<T, N> a;
-    for(int i = 0; i < N; i++) {
-      a(i) = vec[i] - v[i];
-    }
-    return a;
-  }
-
-  template<typename _T>
-  GVector<T, N> &operator-=(const GVector<_T, N> &v) const {
-    for(int i = 0; i < N; i++) {
-      vec[i] -= v[i];
-    }
-    return *this;
-  }
-
-  template<typename _T>
-  GVector<T, N> &operator=(const GVector<_T, N> &v) {
-    for(int i = 0; i < N; i++) {
-      vec[i] = v[i];
-    }
-    return *this;
-  }
-
-  GVector<T, N> operator*(const T &s) const {
-    GVector<T, N> a;
-    for(int i = 0; i < N; i++) a[i] = vec[i] * s;
-    return a;
-  }
-  
-  friend GVector<T, N> operator*(const T &s, const GVector<T, N> &v) {
-    GVector<T, N> a;
-    for(int i = 0; i < N; i++)
-      a[i] = v[i] * s;
-    return a;
-  }
-
-  GVector<T, N> operator/(const T &s) const {
-    GVector<T, N> a;
-    for(int i = 0; i < N; i++) a[i] = vec[i] / s;
-    return a;
-  }
-  
-  friend GVector<T, N> operator/(const T &s, const GVector<T, N> &v) {
-    GVector<T, N> a;
-    for(int i = 0; i < N; i++) a[i] = v[i] / s;
-    return a;
-  }
-
-  void operator*=(const T &s) {
-    for(int i = 0; i < N; i++) vec[i] *= s;
-  }
-
-  void operator/=(const T &s) {
-    for(int i = 0; i < N; i++) vec[i] /= s;
-  }
-
-  // Vector operations
-  template<typename _T>
-  T Dot(const GVector<_T, N> &v) const {
-    T sum = 0;
-    for(int i = 0; i < N; i++) sum += vec[i] * v[i];
-    return sum;
-  }
-
-  T LengthSq() const { return this->Dot(*this); }
-  T Length() const { return sqrt(LengthSq()); }
-};
-
-typedef GVector<float, 2> GVec2f;
-typedef GVector<float, 3> GVec3f;
-
-template<typename T, const int nRows, const int nCols>
-class GMatrix {
- protected:
-  static const int kNumElements = nRows * nCols;
-  T mat[kNumElements];
-
- public:
-  // Constructors
-  GMatrix() { }
-  GMatrix(const GMatrix<T, nRows, nCols> &other) {
-    for(int i = 0; i < kNumElements; i++) {
-      mat[i] = other[i];
-    }
-  }
-
-  // Accessors
-  T &operator()(int idx) { return mat[idx]; }
-  const T &operator()(int idx) const { return mat[idx]; }
-  T &operator()(int r, int c) { return mat[r * nCols + c]; }
-  const T &operator()(int r, int c) const { return mat[r * nCols + c]; }
-
-  T &operator[](int idx) { return mat[idx]; }
-  const T &operator[](int idx) const { return mat[idx]; }
-
-  GMatrix<T, nRows, nCols> &operator=(const GMatrix<T, nRows, nCols> &other) {
-    for(int i = 0; i < kNumElements; i++) {
-      mat[i] = other[i];
-    }    
-  }
-
-  // Operators
-  template<typename _T>
-  GMatrix<T, nRows, nCols> operator+(
-    const GMatrix<_T, nRows, nCols> &m
-  ) {
-    GMatrix<T, nRows, nCols> a;
-    for(int i = 0; i < kNumElements; i++) {
-      a[i] = mat[i] + m[i];
-    }
-    return a;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> &operator+=(
-    const GMatrix<_T, nRows, nCols> &m
-  ) {
-    for(int i = 0; i < kNumElements; i++) {
-      mat[i] += m[i];
-    }
-    return *this;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> operator-(
-    const GMatrix<_T, nRows, nCols> &m
-  ) {
-    GMatrix<T, nRows, nCols> a;
-    for(int i = 0; i < kNumElements; i++) {
-      a[i] = mat[i] - m[i];
-    }
-    return a;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> &operator-=(
-    const GMatrix<_T, nRows, nCols> &m
-  ) {
-    for(int i = 0; i < kNumElements; i++) {
-      mat[i] -= m[i];
-    }
-    return *this;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> operator*(_T s) {
-    GMatrix<T, nRows, nCols> a;
-    for(int i = 0; i < kNumElements; i++) {
-      a[i] = mat[i] * s;
-    }
-    return a;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> &operator*=(_T s) {
-    for(int i = 0; i < kNumElements; i++) {
-      mat[i] *= s;
-    }
-    return *this;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> operator/(_T s) {
-    GMatrix<T, nRows, nCols> a;
-    for(int i = 0; i < kNumElements; i++) {
-      a[i] = mat[i] / s;
-    }
-    return a;
-  }
-
-  template<typename _T>
-  GMatrix<T, nRows, nCols> &operator/=(_T s) {
-    for(int i = 0; i < kNumElements; i++) {
-      mat[i] /= s;
-    }
-    return *this;
-  }
-
-  // Matrix multiplication
-  template<typename _T, const int nTarget>
-  GMatrix<T, nRows, nTarget> operator*(
-    const GMatrix<_T, nCols, nTarget> &m
-  ) {
-    GMatrix<T, nRows, nTarget> result;
-    for(int r = 0; r < nRows; r++)
-    for(int c = 0; c < nTarget; c++) {
-      result(r, c) = 0;
-      for(int j = 0; j < nCols; j++) {
-        result(r, c) += (*this)(r, j) * m(j, c);
-      }
-    }
-    return result;
-  }
-
-  template<typename _T, const int nTarget>
-  GMatrix<T, nRows, nTarget> &operator*=(
-    const GMatrix<_T, nCols, nTarget> &m
-  ) {
-    (*this) = (*this) * m;
-    return (*this);
-  }
-
-  // Vector multiplication
-  template<typename _T>
-  GVector<T, nCols> operator*(const GVector<_T, nCols> &v) {
-    GVector<T, nCols> result;
-    for(int r = 0; r < nRows; r++) {
-      result(r) = 0;
-      for(int j = 0; j < nCols; j++) {
-        result(r) += (*this)(r, j) * v(j);
-      }
-    }
-    return result;
-  }
-};
-
-typedef GMatrix<float, 2, 2> GMatrix2x2f;
-typedef GMatrix<float, 3, 3> GMatrix3x3f;
-
-// Return an identity matrix of a given size
-template<unsigned size>
-static GMatrix<float, size, size> Identity() {
-  typedef GMatrix<float, size, size> MatrixType;
-  MatrixType m;
-  for(uint32_t j = 0; j < size; j++) {
-    for(uint32_t i = 0; i < size; i++) {
-      m(i, j) = (i == j)? 1.0f : 0.0f;
-    }
-  }
-  return m;
-}
-
-static float Determinant3x3f(GMatrix3x3f &m) {
-  return 0.0f
-    + m(0, 0) * (m(1, 1) * m(2, 2) - m(2, 1) * m(1, 2))
-    - m(0, 1) * (m(1, 0) * m(2, 2) - m(2, 0) * m(0, 2))
-    + m(0, 2) * (m(1, 0) * m(2, 1) - m(2, 0) * m(1, 1));
-}
-
-static void Invert3x3f(GMatrix3x3f &m) {
-
-  float determinant = Determinant3x3f(m);
-  // assert(fabs(determinant) > 1e-6f);
-
-  float d = 1.0f / determinant;
-
-  float m00 = m(2, 2) * m(1, 1) - m(2, 1) * m(1, 2);
-  float m01 = m(0, 2) * m(2, 1) - m(2, 2) * m(0, 1);
-  float m02 = m(0, 1) * m(1, 2) - m(1, 1) * m(0, 2);
-  float m10 = m(1, 2) * m(2, 0) - m(2, 2) * m(1, 0);
-  float m11 = m(0, 0) * m(2, 2) - m(2, 0) * m(0, 2);
-  float m12 = m(0, 2) * m(1, 0) - m(1, 2) * m(0, 0);
-  float m20 = m(1, 0) * m(2, 1) - m(2, 0) * m(1, 1);
-  float m21 = m(0, 1) * m(2, 0) - m(2, 1) * m(0, 0);
-  float m22 = m(0, 0) * m(1, 1) - m(1, 0) * m(0, 1);
-  m(0, 0) = m00;
-  m(0, 1) = m01;
-  m(0, 2) = m02;
-  m(1, 0) = m10;
-  m(1, 1) = m11;
-  m(1, 2) = m12;
-  m(2, 0) = m20;
-  m(2, 1) = m21;
-  m(2, 2) = m22;
-  m *= d;
-}
 
 template<typename T>
 inline T Clamp(const T &v, const T &minVal, const T &maxVal) {
@@ -353,7 +28,7 @@ inline GColor ClampColor(const GColor &c) {
 class GDeferredContext : public GContext {
  public:
   GDeferredContext() {
-    SetCTM(Identity<3>());
+    SetCTM(GMatrix3x3f());
   }
 
   virtual void getBitmap(GBitmap *bm) const {
@@ -370,31 +45,17 @@ class GDeferredContext : public GContext {
   ::std::vector<GMatrix3x3f> m_CTMStack;
   GMatrix3x3f m_CTM;
   GMatrix3x3f m_CTMInv;
+  bool m_ValidCTM;
 
   virtual void onSave() {
     m_CTMStack.push_back(m_CTM);
-    m_CTM = Identity<3>();
-    for(uint32_t i = 0; i < m_CTMStack.size(); i++) {
-      m_CTM *= m_CTMStack[i];
-    }
-    SetCTM(m_CTM);
   }
 
   virtual void onRestore() {
     uint32_t sz = m_CTMStack.size();
-    if(sz > 0) {
-      SetCTM(m_CTMStack[sz - 1]);
-      m_CTMStack.pop_back();
-    } else {
-      assert(!"This is an error.");
-      SetCTM(Identity<3>());
-    }
-  }
-
-  void SetCTM(const GMatrix3x3f &m) {
-    m_CTM = m;
-    m_CTMInv = m_CTM;
-    Invert3x3f(m_CTMInv);    
+    assert(sz > 0);
+    SetCTM(m_CTMStack[sz - 1]);
+    m_CTMStack.pop_back();
   }
 
   void MultiplyCTM(const GMatrix3x3f &m) {
@@ -402,19 +63,27 @@ class GDeferredContext : public GContext {
   }
 
   virtual void translate(float tx, float ty) {
-    GMatrix3x3f m = Identity<3>();
+    GMatrix3x3f m;
     m(0, 2) = tx;
     m(1, 2) = ty;
     MultiplyCTM(m);
   }
 
   virtual void scale(float sx, float sy) {
-    GMatrix3x3f m = Identity<3>();
+    GMatrix3x3f m;
     m(0, 0) = sx;
     m(1, 1) = sy;
     MultiplyCTM(m);
   }
 
+ private:
+  void SetCTM(const GMatrix3x3f &m) {
+    m_CTM = m;
+    m_CTMInv = m_CTM;
+    m_ValidCTM = m_CTMInv.Invert();
+  }
+
+ protected:
   virtual const GBitmap &GetInternalBitmap() const = 0;
 
   enum EBlendOp {
@@ -432,8 +101,16 @@ class GDeferredContext : public GContext {
     return (a * b + 127) / 255;
   }
 
+  static GPixel blend_src(GPixel dst, GPixel src) {
+    return src;
+  }
+
   static GPixel blend_srcover(GPixel dst, GPixel src) {
     uint32_t srcA = GPixel_GetA(src);
+    if(srcA == 255) {
+      return src;
+    }
+
     uint32_t srcR = GPixel_GetR(src);
     uint32_t srcG = GPixel_GetG(src);
     uint32_t srcB = GPixel_GetB(src);
@@ -449,26 +126,16 @@ class GDeferredContext : public GContext {
                            srcB + fixed_multiply(dstB, 255 - srcA));
   }
 
-  static GPixel blend(GPixel &dst, GPixel src, EBlendOp op) {
-    switch(op) {
-      case eBlendOp_Src: return src;
-      case eBlendOp_SrcOver:
-        if(GPixel_GetA(src) == 255) {
-          return src;
-        } else {
-          return blend_srcover(dst, src);
-        }
-    }
-  }
+  typedef GPixel (*BlendFunc)(GPixel dst, GPixel src);
 
-  template<typename RectType>
-  static RectType IntersectRect(const RectType &a, const RectType &b) {
-    RectType ret;
-    ret.fLeft = std::max(a.fLeft, b.fLeft);
-    ret.fTop = std::max(a.fTop, b.fTop);
-    ret.fRight = std::min(a.fRight, b.fRight);
-    ret.fBottom = std::min(a.fBottom, b.fBottom);
-    return ret;
+  static BlendFunc GetBlendFunc(EBlendOp op) {
+    switch(op) {
+      case eBlendOp_Src:
+        return blend_src;
+   
+      case eBlendOp_SrcOver:
+        return blend_srcover;
+    }
   }
 
   static GPixel *GetRow(const GBitmap &bm, int row) {
@@ -476,41 +143,42 @@ class GDeferredContext : public GContext {
     return reinterpret_cast<GPixel *>(rowPtr);
   }
 
+  static bool CheckSkew(const GMatrix3x3f &m) {
+    if(m(0, 1) != 0 || m(1, 0) != 0) {
+      return true;
+    }
+    return false;
+  }
+
+  static void AddPoint(GRect &r, const GVec3f &v) {
+    r.fLeft = std::min(r.fLeft, v.X());
+    r.fTop = std::min(r.fTop, v.Y());
+    r.fRight = std::max(r.fRight, v.X());
+    r.fBottom = std::max(r.fBottom, v.Y());
+  }
+
   GRect GetTransformedBoundingBox(const GRect &r) {
     // Top Left
-    GVec3f tl;
-    tl[0] = r.fLeft;
-    tl[1] = r.fTop;
-    tl[2] = 1.0f;
+    GVec3f tl(r.fLeft, r.fTop, 1.0f);
 
     // Top right
-    GVec3f tr;
-    tr[0] = r.fRight;
-    tr[1] = r.fTop;
-    tr[2] = 1.0f;
+    GVec3f tr(r.fRight, r.fTop, 1.0f);
 
     // Bottom left
-    GVec3f bl;
-    bl[0] = r.fLeft;
-    bl[1] = r.fBottom;
-    bl[2] = 1.0f;
+    GVec3f bl(r.fLeft, r.fBottom, 1.0f);
 
     // Bottom right
-    GVec3f br;
-    br[0] = r.fRight;
-    br[1] = r.fBottom;
-    br[2] = 1.0f;
+    GVec3f br(r.fRight, r.fBottom, 1.0f);
 
     tl = m_CTM * tl;
     tr = m_CTM * tr;
     bl = m_CTM * bl;
     br = m_CTM * br;
 
-    GRect ret;
-    ret.fLeft = std::min(std::min(std::min(tl[0], tr[0]), bl[0]), br[0]);
-    ret.fTop = std::min(std::min(std::min(tl[1], tr[1]), bl[1]), br[1]);
-    ret.fRight = std::max(std::max(std::max(tl[0], tr[0]), bl[0]), br[0]);
-    ret.fBottom = std::max(std::max(std::max(tl[1], tr[1]), bl[1]), br[1]);
+    GRect ret = GRect::MakeXYWH(tl.X(), tl.Y(), 0, 0);
+    AddPoint(ret, tr);
+    AddPoint(ret, bl);
+    AddPoint(ret, br);
     return ret;
   }
 
@@ -526,13 +194,7 @@ class GDeferredContext : public GContext {
     }
 
     // Rein everything back into integer land
-    GIRect dstRect = GIRect::MakeLTRB(
-      static_cast<int32_t>(rect.fLeft + 0.5f),
-      static_cast<int32_t>(rect.fTop + 0.5f),
-      static_cast<int32_t>(rect.fRight + 0.5f),
-      static_cast<int32_t>(rect.fBottom + 0.5f)
-    );
-
+    GIRect dstRect = rect.round();
     if(dstRect.isEmpty()) {
       return;
     }
@@ -542,14 +204,16 @@ class GDeferredContext : public GContext {
     const float kOpaqueAlpha = (254.5f / 255.0f);
     float alpha = paint.getAlpha();
 
+    // Blend func is currently just srcOver..
+    BlendFunc blend = blend_srcover;
+
     if(alpha >= kOpaqueAlpha) {
       for(uint32_t j = 0; j < dstRect.height(); j++) {
         for(uint32_t i = 0; i < dstRect.width(); i++) {
 
-          GVec3f ctxPt;
-          ctxPt[0] = static_cast<float>(dstRect.fLeft + i) + 0.5f;
-          ctxPt[1] = static_cast<float>(dstRect.fTop + j) + 0.5f;
-          ctxPt[2] = 1.0f;
+          GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
+                       static_cast<float>(dstRect.fTop + j) + 0.5f,
+                       1.0f);
 
           ctxPt = m_CTMInv * ctxPt;
 
@@ -559,7 +223,7 @@ class GDeferredContext : public GContext {
 
             GPixel *srcRow = GetRow(bm, yy);
             GPixel *dstRow = GetRow(ctxbm, j+dstRect.fTop) + dstRect.fLeft;
-            dstRow[i] = blend(dstRow[i], srcRow[xx], eBlendOp_SrcOver);
+            dstRow[i] = blend(dstRow[i], srcRow[xx]);
           }
         }
       }
@@ -567,10 +231,9 @@ class GDeferredContext : public GContext {
       const uint32_t alphaVal = static_cast<uint32_t>((alpha * 255.0f) + 0.5f);
       for(uint32_t j = 0; j < dstRect.height(); j++) {
         for(uint32_t i = 0; i < dstRect.width(); i++) {
-          GVec3f ctxPt;
-          ctxPt[0] = static_cast<float>(dstRect.fLeft + i) + 0.5f;
-          ctxPt[1] = static_cast<float>(dstRect.fTop + j) + 0.5f;
-          ctxPt[2] = 1.0f;
+          GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
+                       static_cast<float>(dstRect.fTop + j) + 0.5f,
+                       1.0f);
 
           ctxPt = m_CTMInv * ctxPt;
 
@@ -586,7 +249,7 @@ class GDeferredContext : public GContext {
             uint32_t srcG = fixed_multiply(GPixel_GetG(srcRow[x]), alphaVal);
             uint32_t srcB = fixed_multiply(GPixel_GetB(srcRow[x]), alphaVal);
             GPixel src = GPixel_PackARGB(srcA, srcR, srcG, srcB);
-            dstRow[i] = blend(dstRow[i], src, eBlendOp_SrcOver);
+            dstRow[i] = blend(dstRow[i], src);
           }
         }
       }
@@ -610,20 +273,23 @@ class GDeferredContext : public GContext {
     GRect ctxRect = GRect::MakeXYWH(0, 0, ctxbm.width(), ctxbm.height());
     GRect pixelRect = GetTransformedBoundingBox(rect);
 
+    if(pixelRect.isEmpty()) {
+      return;
+    }
+
     GRect trRect;
     if(!(trRect.setIntersection(ctxRect, pixelRect))) {
       return;
     }
 
     // Rein everything back into integer land
-    GIRect dstRect = GIRect::MakeLTRB(
-      static_cast<int32_t>(trRect.fLeft + 0.5f),
-      static_cast<int32_t>(trRect.fTop + 0.5f),
-      static_cast<int32_t>(trRect.fRight + 0.5f),
-      static_cast<int32_t>(trRect.fBottom + 0.5f)
-    );
-
+    GIRect dstRect = trRect.round();
     if(dstRect.isEmpty()) {
+      return;
+    }
+
+    if(!(CheckSkew(m_CTM))) {
+      fillIRect(dstRect, p.getColor(), eBlendOp_SrcOver);
       return;
     }
 
@@ -634,13 +300,15 @@ class GDeferredContext : public GContext {
     const float kOpaqueAlpha = (254.5f / 255.0f);
     float alpha = p.getAlpha();
 
+    // Blend func is currently just srcover
+    BlendFunc blend = blend_srcover;
+
     for(uint32_t j = 0; j < dstRect.height(); j++) {
       for(uint32_t i = 0; i < dstRect.width(); i++) {
 
-        GVec3f ctxPt;
-        ctxPt[0] = static_cast<float>(dstRect.fLeft + i) + 0.5f;
-        ctxPt[1] = static_cast<float>(dstRect.fTop + j) + 0.5f;
-        ctxPt[2] = 1.0f;
+        GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
+                     static_cast<float>(dstRect.fTop + j) + 0.5f,
+                     1.0f);
 
         ctxPt = m_CTMInv * ctxPt;
 
@@ -649,7 +317,7 @@ class GDeferredContext : public GContext {
           uint32_t y = static_cast<uint32_t>(ctxPt[1] - rect.fTop);
 
           GPixel *dstRow = GetRow(ctxbm, j+dstRect.fTop) + dstRect.fLeft;
-          dstRow[i] = blend(dstRow[i], clearValue, eBlendOp_SrcOver);
+          dstRow[i] = blend(dstRow[i], clearValue);
         }
       }
     }
@@ -662,8 +330,8 @@ class GDeferredContext : public GContext {
     uint32_t h = bitmap.fHeight;
     uint32_t w = bitmap.fWidth;
 
-    GIRect bmRect = IntersectRect(rect, GIRect::MakeWH(w, h));
-    if(bmRect.isEmpty())
+    GIRect bmRect;
+    if(!(bmRect.setIntersection(rect, GIRect::MakeWH(w, h))))
       return;
 
     h = bmRect.height();
@@ -671,6 +339,9 @@ class GDeferredContext : public GContext {
 
     // premultiply alpha ...
     GPixel clearValue = ColorToPixel(c);
+
+    // Figure out blendfunc
+    BlendFunc blend = GetBlendFunc(op);
 
     if(bitmap.fRowBytes == w * sizeof(GPixel)) {
       GPixel *p = bitmap.fPixels + bmRect.fTop*bitmap.fWidth + bmRect.fLeft;
@@ -682,7 +353,7 @@ class GDeferredContext : public GContext {
         default: {
           GPixel *end = bitmap.fPixels + ((bmRect.fBottom - 1) * w + bmRect.fRight);
           for(; p != end; p++) {
-            *p = blend(*p, clearValue, op);
+            *p = blend(*p, clearValue);
           }
           break;
         }
@@ -701,7 +372,7 @@ class GDeferredContext : public GContext {
 
           default: {
             GPixel oldP = rowPixels[0];
-            GPixel newP = blend(oldP, clearValue, op);
+            GPixel newP = blend(oldP, clearValue);
             rowPixels[0] = newP;
             
             for(uint32_t i = 1; i < w; i++) {
@@ -709,7 +380,7 @@ class GDeferredContext : public GContext {
                 rowPixels[i] = newP;
               } else {
                 oldP = rowPixels[i];
-                newP = rowPixels[i] = blend(rowPixels[i], clearValue, op);
+                newP = rowPixels[i] = blend(rowPixels[i], clearValue);
               }
             }
             break;

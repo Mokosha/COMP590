@@ -3,7 +3,7 @@ CC = g++ -g
 CC_DEBUG = $(CC) 
 CC_RELEASE = $(CC) -O3 -DNDEBUG
 
-G_SRC = src/GBitmap.cpp src/GTime.cpp src/GPaint.cpp src/GContext.cpp
+G_SRC = src/GBitmap.cpp src/GTime.cpp src/GPaint.cpp GContext.cpp
 
 # need libpng to build
 #
