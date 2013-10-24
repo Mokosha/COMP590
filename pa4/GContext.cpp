@@ -182,10 +182,66 @@ class GDeferredContext : public GContext {
     return ret;
   }
 
-  void drawBitmap(const GBitmap &bm, float x, float y, const GPaint &paint) {
+  void drawXFormPixel(const uint32_t i, const uint32_t j,
+                      const GIRect &dstRect, const GRect &srcRect,
+                      const GBitmap &src, const GBitmap &dst,
+                      const BlendFunc blend = blend_srcover) {
+
+    GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
+                 static_cast<float>(dstRect.fTop + j) + 0.5f,
+                 1.0f);
+
+    ctxPt = m_CTMInv * ctxPt;
+
+    if(srcRect.contains(ctxPt[0], ctxPt[1])) {
+      uint32_t xx = static_cast<uint32_t>(ctxPt[0] - srcRect.fLeft);
+      uint32_t yy = static_cast<uint32_t>(ctxPt[1] - srcRect.fTop);
+      
+      GPixel *srcRow = GetRow(src, yy);
+      GPixel *dstRow = GetRow(dst, j+dstRect.fTop) + dstRect.fLeft;
+      dstRow[i] = blend(dstRow[i], srcRow[xx]);
+    }
+  }
+
+  void drawXFormPixelWithAlpha(const uint32_t i, const uint32_t j,
+                               const GIRect &dstRect, const GRect &srcRect,
+                               const GBitmap &src, const GBitmap &dst,
+                               const uint8_t alpha,
+                               const BlendFunc blend = blend_srcover) {
+
+    GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
+                 static_cast<float>(dstRect.fTop + j) + 0.5f,
+                 1.0f);
+
+    ctxPt = m_CTMInv * ctxPt;
+
+    if(srcRect.contains(ctxPt[0], ctxPt[1])) {
+      uint32_t x = static_cast<uint32_t>(ctxPt[0] - srcRect.fLeft);
+      uint32_t y = static_cast<uint32_t>(ctxPt[1] - srcRect.fTop);
+
+      GPixel *srcRow = GetRow(src, y);
+      GPixel *dstRow = GetRow(dst, j+dstRect.fTop) + dstRect.fLeft;
+
+      uint32_t srcA = fixed_multiply(GPixel_GetA(srcRow[x]), alpha);
+      uint32_t srcR = fixed_multiply(GPixel_GetR(srcRow[x]), alpha);
+      uint32_t srcG = fixed_multiply(GPixel_GetG(srcRow[x]), alpha);
+      uint32_t srcB = fixed_multiply(GPixel_GetB(srcRow[x]), alpha);
+      GPixel src = GPixel_PackARGB(srcA, srcR, srcG, srcB);
+      dstRow[i] = blend(dstRow[i], src);
+    }
+  }
+
+  // If the alpha value is above this value, then it will round to
+  // an opaque pixel during quantization.
+  static const float kOpaqueAlpha = (254.5f / 255.0f);
+  static const float kTransparentAlpha = (0.499999f / 255.0f);
+
+  // This code draws a bitmap using the full m_CTM transform without any thought
+  // to whether or not the transform has any special properties.
+  void drawBitmapXForm(const GBitmap &bm, const GPaint &paint) {
     const GBitmap &ctxbm = GetInternalBitmap();
     GRect ctxRect = GRect::MakeXYWH(0, 0, ctxbm.width(), ctxbm.height());
-    GRect bmRect = GRect::MakeXYWH(x, y, bm.width(), bm.height());
+    GRect bmRect = GRect::MakeXYWH(0, 0, bm.width(), bm.height());
     GRect pixelRect = GetTransformedBoundingBox(bmRect);
 
     GRect rect;
@@ -199,61 +255,120 @@ class GDeferredContext : public GContext {
       return;
     }
 
-    // If the alpha value is above this value, then it will round to
-    // an opaque pixel during quantization.
-    const float kOpaqueAlpha = (254.5f / 255.0f);
     float alpha = paint.getAlpha();
-
-    // Blend func is currently just srcOver..
-    BlendFunc blend = blend_srcover;
-
     if(alpha >= kOpaqueAlpha) {
       for(uint32_t j = 0; j < dstRect.height(); j++) {
         for(uint32_t i = 0; i < dstRect.width(); i++) {
-
-          GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
-                       static_cast<float>(dstRect.fTop + j) + 0.5f,
-                       1.0f);
-
-          ctxPt = m_CTMInv * ctxPt;
-
-          if(bmRect.contains(ctxPt[0], ctxPt[1])) {
-            uint32_t xx = static_cast<uint32_t>(ctxPt[0] - bmRect.fLeft);
-            uint32_t yy = static_cast<uint32_t>(ctxPt[1] - bmRect.fTop);
-
-            GPixel *srcRow = GetRow(bm, yy);
-            GPixel *dstRow = GetRow(ctxbm, j+dstRect.fTop) + dstRect.fLeft;
-            dstRow[i] = blend(dstRow[i], srcRow[xx]);
-          }
+          drawXFormPixel(i, j, dstRect, bmRect, bm, ctxbm);
         }
       }
     } else {
       const uint32_t alphaVal = static_cast<uint32_t>((alpha * 255.0f) + 0.5f);
       for(uint32_t j = 0; j < dstRect.height(); j++) {
         for(uint32_t i = 0; i < dstRect.width(); i++) {
-          GVec3f ctxPt(static_cast<float>(dstRect.fLeft + i) + 0.5f,
-                       static_cast<float>(dstRect.fTop + j) + 0.5f,
-                       1.0f);
-
-          ctxPt = m_CTMInv * ctxPt;
-
-          if(bmRect.contains(ctxPt[0], ctxPt[1])) {
-            uint32_t x = static_cast<uint32_t>(ctxPt[0] - bmRect.fLeft);
-            uint32_t y = static_cast<uint32_t>(ctxPt[1] - bmRect.fTop);
-
-            GPixel *srcRow = GetRow(bm, y);
-            GPixel *dstRow = GetRow(ctxbm, j+dstRect.fTop) + dstRect.fLeft;
-
-            uint32_t srcA = fixed_multiply(GPixel_GetA(srcRow[x]), alphaVal);
-            uint32_t srcR = fixed_multiply(GPixel_GetR(srcRow[x]), alphaVal);
-            uint32_t srcG = fixed_multiply(GPixel_GetG(srcRow[x]), alphaVal);
-            uint32_t srcB = fixed_multiply(GPixel_GetB(srcRow[x]), alphaVal);
-            GPixel src = GPixel_PackARGB(srcA, srcR, srcG, srcB);
-            dstRow[i] = blend(dstRow[i], src);
-          }
+          drawXFormPixelWithAlpha(i, j, dstRect, bmRect, bm, ctxbm, alphaVal);
         }
       }
     }
+  }
+
+  // This code draws a bitmap assuming that we only have translation and scale,
+  // which allows us to perform certain optimizations...
+  void drawBitmapSimple(const GBitmap &bm, const GPaint &paint) {
+    const GBitmap &ctxbm = GetInternalBitmap();
+    GRect ctxRect = GRect::MakeXYWH(0, 0, ctxbm.width(), ctxbm.height());
+    GRect bmRect = GRect::MakeXYWH(0, 0, bm.width(), bm.height());
+    GRect pixelRect = GetTransformedBoundingBox(bmRect);
+
+    GRect rect;
+    if(!(rect.setIntersection(ctxRect, pixelRect))) {
+      return;
+    }
+
+    // We know that since we're only doing scale and translation, that all of the pixel
+    // centers contained in rect are going to be drawn, so we only need to know the
+    // dimensions of the mapping...
+    GVec3f origin(0, 0, 1);
+    GVec3f offset(1, 1, 1);
+
+    origin = m_CTM * origin;
+    offset = m_CTM * offset;
+
+    float xScale = offset.X() - origin.X();
+    float yScale = offset.Y() - origin.Y();
+
+    GVec2f start = GVec2f(0, 0);
+    if(xScale < 0.0f) {
+      start.X() = pixelRect.fRight - 1.0f;
+    }
+    if(yScale < 0.0f) {
+      start.Y() = pixelRect.fBottom - 1.0f;
+    }
+
+    GIRect dstRect = rect.round();
+
+    // Construct new bitmap
+    int32_t offsetX = ::std::max(0, -dstRect.fLeft);
+    int32_t offsetY = ::std::max(0, -dstRect.fTop);
+    GBitmap fbm;
+    fbm.fWidth = bm.width();
+    fbm.fHeight = bm.height();
+    fbm.fPixels = GetRow(bm, offsetY) + offsetX;
+    fbm.fRowBytes = bm.fRowBytes;
+
+    BlendFunc blend = blend_srcover;
+
+    float alpha = paint.getAlpha();
+    if(alpha >= kOpaqueAlpha) {
+      for(uint32_t j = 0; j < dstRect.height(); j++) {
+
+        uint32_t srcIdxY = static_cast<uint32_t>(start.Y() + static_cast<float>(j) * yScale);
+        GPixel *srcPixels = GetRow(fbm, srcIdxY);
+        GPixel *dstPixels = GetRow(ctxbm, dstRect.fTop + j) + dstRect.fLeft;
+
+        for(uint32_t i = 0; i < dstRect.width(); i++) {
+          uint32_t srcIdxX = static_cast<uint32_t>(start.X() + static_cast<float>(i) * xScale);
+          dstPixels[i] = blend(dstPixels[i], srcPixels[srcIdxX]);
+        }
+      }
+    } else {
+      const uint32_t alphaVal = static_cast<uint32_t>((alpha * 255.0f) + 0.5f);
+      for(uint32_t j = 0; j < dstRect.height(); j++) {
+
+        uint32_t srcIdxY = static_cast<uint32_t>(start.Y() + static_cast<float>(j) * yScale);
+        GPixel *srcPixels = GetRow(fbm, srcIdxY);
+        GPixel *dstPixels = GetRow(ctxbm, dstRect.fTop + j) + dstRect.fLeft;
+
+        for(uint32_t i = 0; i < dstRect.width(); i++) {
+          uint32_t srcIdxX = static_cast<uint32_t>(start.X() + static_cast<float>(i) * xScale);
+          uint32_t srcA = fixed_multiply(GPixel_GetA(srcPixels[srcIdxX]), alphaVal);
+          uint32_t srcR = fixed_multiply(GPixel_GetR(srcPixels[srcIdxX]), alphaVal);
+          uint32_t srcG = fixed_multiply(GPixel_GetG(srcPixels[srcIdxX]), alphaVal);
+          uint32_t srcB = fixed_multiply(GPixel_GetB(srcPixels[srcIdxX]), alphaVal);
+          GPixel src = GPixel_PackARGB(srcA, srcR, srcG, srcB);
+          dstPixels[i] = blend(dstPixels[i], src);
+        }
+      }
+    }
+  }
+
+  void drawBitmap(const GBitmap &bm, float x, float y, const GPaint &paint) {
+
+    float alpha = paint.getAlpha();
+    if(alpha < kTransparentAlpha) {
+      return;
+    }
+
+    save();
+    translate(x, y);
+
+    if(CheckSkew(m_CTM)) {
+      drawBitmapXForm(bm, paint);
+    } else {
+      drawBitmapSimple(bm, paint);
+    }
+
+    restore();
   }
 
   static GPixel ColorToPixel(const GColor &c) {

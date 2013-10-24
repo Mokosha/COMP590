@@ -31,7 +31,7 @@ class GVector {
   // Allow casts to the respective array representation...
   operator T *() const { return vec; }
   GVector<T, N> &operator=(const T *v) {
-    for(int i = 0; i < N; i++) vec[i] = v[i];
+    for(int i = 0; i < N; i++) this->vec[i] = v[i];
     return *this;
   }
 
@@ -46,15 +46,15 @@ class GVector {
   GVector<T, N> operator+(const GVector<_T, N> &v) const {
     GVector a;
     for(int i = 0; i < N; i++) {
-      a.vec[i] = v(i) + vec[i];
+      a.vec[i] = v(i) + this->vec[i];
     }
     return a;
   }
 
   template<typename _T>
-  GVector<T, N> &operator+=(const GVector<_T, N> &v) const {
+  GVector<T, N> &operator+=(const GVector<_T, N> &v) {
     for(int i = 0; i < N; i++) {
-      vec[i] += v(i);
+      this->vec[i] += v(i);
     }
     return *this;
   }
@@ -63,15 +63,15 @@ class GVector {
   GVector<T, N> operator-(const GVector<_T, N> &v) const {
     GVector<T, N> a;
     for(int i = 0; i < N; i++) {
-      a(i) = vec[i] - v[i];
+      a(i) = this->vec[i] - v[i];
     }
     return a;
   }
 
   template<typename _T>
-  GVector<T, N> &operator-=(const GVector<_T, N> &v) const {
+  GVector<T, N> &operator-=(const GVector<_T, N> &v) {
     for(int i = 0; i < N; i++) {
-      vec[i] -= v[i];
+      this->vec[i] -= v[i];
     }
     return *this;
   }
@@ -79,7 +79,7 @@ class GVector {
   template<typename _T>
   GVector<T, N> &operator=(const GVector<_T, N> &v) {
     for(int i = 0; i < N; i++) {
-      vec[i] = v[i];
+      this->vec[i] = v[i];
     }
     return *this;
   }
