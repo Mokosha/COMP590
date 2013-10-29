@@ -294,8 +294,8 @@ class GDeferredContext : public GContext {
     origin = m_CTM * origin;
     offset = m_CTM * offset;
 
-    float xScale = offset.X() - origin.X();
-    float yScale = offset.Y() - origin.Y();
+    float xScale = 1.0f / (offset.X() - origin.X());
+    float yScale = 1.0f / (offset.Y() - origin.Y());
 
     GVec2f start = GVec2f(0, 0);
     if(xScale < 0.0f) {
@@ -323,12 +323,12 @@ class GDeferredContext : public GContext {
       for(uint32_t j = 0; j < dstRect.height(); j++) {
 
         uint32_t srcIdxY = static_cast<uint32_t>(start.Y() + static_cast<float>(j) * yScale);
-        GPixel *srcPixels = GetRow(fbm, srcIdxY);
+        GPixel *srcPixels = GetRow(fbm, Clamp<int>(srcIdxY, 0, fbm.height()));
         GPixel *dstPixels = GetRow(ctxbm, dstRect.fTop + j) + dstRect.fLeft;
 
         for(uint32_t i = 0; i < dstRect.width(); i++) {
           uint32_t srcIdxX = static_cast<uint32_t>(start.X() + static_cast<float>(i) * xScale);
-          dstPixels[i] = blend(dstPixels[i], srcPixels[srcIdxX]);
+          dstPixels[i] = blend(dstPixels[i], srcPixels[Clamp<int>(srcIdxX, 0, fbm.width())]);
         }
       }
     } else {
