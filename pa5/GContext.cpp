@@ -510,6 +510,181 @@ class GDeferredContext : public GContext {
       }  // for
     }  // else
   }
+
+  GPoint Vert2Point(const GVec3f &vert) {
+    GPoint ret;
+    ret.set(vert[0] / vert[2], vert[1] / vert[2]);
+    return ret;
+  }
+
+  static bool ComputeLine(const GPoint &p1, const GPoint &p2, float &m, float &b) {
+    float dx = (p2.fX - p1.fX);
+    if(dx == 0) {
+      return true;
+    }
+    m = (p2.fY - p1.fY) / dx;
+    b = p1.fY - m*p1.fX;
+    return false;
+  }
+
+  bool TestCollinear(const GVec3f *verts, const uint32_t nVerts) {
+    if(nVerts <= 2)
+      return true;
+
+    float m, b;
+    bool vertical = ComputeLine(Vert2Point(verts[0]), Vert2Point(verts[1]), m, b);
+
+    for(uint32_t i = 2; i < nVerts; i++) {
+      float nm, nb;
+      bool nv = ComputeLine(Vert2Point(verts[i]), Vert2Point(verts[i-1]), nm, nb);
+
+      // If any line isn't collinear, then just exit
+      if(vertical) {
+        if(!nv) {
+          return false;
+        }
+      } else if(fabs(nm - m) > 0.0001 || fabs(nb - b) > 0.0001) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  struct GEdge {
+    GPoint p1;
+    GPoint p2;
+    GEdge(GPoint _p1, GPoint _p2) : p1(_p1), p2(_p2) { }
+    bool ComputeLine(float &m, float &b) const {
+      return GDeferredContext::ComputeLine(p1, p2, m, b);
+    }
+  };
+
+  void WalkEdges(const GEdge e1, const GEdge e2, const GPaint &paint) {
+
+    const GBitmap &bm = GetInternalBitmap();
+    int h = bm.fHeight;
+    int w = bm.fWidth;
+
+    GASSERT(e1.p1.y() == e2.p1.y());
+    int startY = Clamp(static_cast<int>(e1.p1.y() + 0.5f), 0, h-1);
+    GASSERT(e1.p2.y() == e2.p2.y());
+    int endY = Clamp(static_cast<int>(e1.p2.y() + 0.5f), 0, h-1);
+
+    if(endY == startY) {
+      return;
+    }
+
+    GASSERT(endY > startY);
+
+    // Initialize to NAN
+    float m1 = 0.0f/0.0f, b1;
+    float m2 = 0.0f/0.0f, b2;
+    bool vert1 = e1.ComputeLine(m1, b1);
+    bool vert2 = e2.ComputeLine(m2, b2);
+
+    if(m1 == 0 || m2 == 0) {
+      return;
+    }
+
+    // Collinear?
+    if(vert2 && vert1 && e1.p1.x() == e2.p1.x()) {
+      return;
+    } else if(m1 == m2 && b1 == b2) {
+      return;
+    }
+
+    float stepX1 = vert1? 0 : 1/m1;
+    float stepX2 = vert2? 0 : 1/m2;
+
+    GPoint p1, p2;
+    float sY = static_cast<float>(startY) + 0.5f;
+    if(vert1) {
+      p1.set(e1.p1.x(), sY);
+    } else {
+      p1.set((sY - b1) / m1, sY);
+    }
+
+    if(vert2) {
+      p2.set(e2.p1.x(), sY);
+    } else {
+      p2.set((sY - b2) / m2, sY);
+    }
+
+    // Make sure that p1 is always less than p2 to avoid
+    // doing a min/max in the inner loop
+    if(p1.x() > p2.x()) {
+      std::swap(p1, p2);
+      std::swap(stepX1, stepX2);
+    }
+
+    GPixel color = ColorToPixel(paint.getColor());
+    BlendFunc blend = GetBlendFunc(eBlendOp_SrcOver);
+
+    uint32_t nSteps = endY - startY;
+    for(uint32_t i = 0; i < nSteps; i++) {
+
+      // Since we haven't implemented clipping yet, take care
+      // not to go beyond our bounds...
+      const int x1 = Clamp<int>(p1.fX + 0.5f, 0, w-1);
+      const int x2 = Clamp<int>(p2.fX + 0.5f, 0, w-1);
+
+      GPixel *row = GetRow(bm, startY + i);
+      for(int x = x1; x < x2; x++) {
+        row[x] = blend(row[x], color);
+      }
+
+      p1.fX += stepX1;
+      p2.fX += stepX2;
+    }
+  }
+
+  void drawTriangle(const GPoint vertices[3], const GPaint &paint) {
+    GVec3f verts[3] = {
+      GVec3f(vertices[0].fX, vertices[0].fY, 1.0f),
+      GVec3f(vertices[1].fX, vertices[1].fY, 1.0f),
+      GVec3f(vertices[2].fX, vertices[2].fY, 1.0f)
+    };
+
+    GPoint points[3] = {
+      Vert2Point(m_CTM * verts[0]),
+      Vert2Point(m_CTM * verts[1]),
+      Vert2Point(m_CTM * verts[2])
+    };
+
+    // Sort based on y
+    for(uint32_t i = 0; i < 3; i++) {
+      for(uint32_t j = i+1; j < 3; j++) {
+        if(points[i].y() > points[j].y()) {
+          std::swap(points[i], points[j]);
+        }
+      }
+    }
+
+    // Determine first half of triangle
+    // Initialize to NaN
+    float m = 0.0f/0.0f, b;
+    bool vertical = ComputeLine(points[0], points[2], m, b);
+
+    // If the line from 0 to 2 is horizontal, then since we're ordered in y,
+    // all of the points must be collinear...
+    if(m == 0) {
+      return;
+    }
+
+    // Compute intersection of this line with the second point
+    GPoint p;
+    p.fY = points[1].y();
+    if(vertical) {
+      p.fX = points[0].x();
+    } else {
+      p.fX = (p.fY - b) / m;
+    }
+
+    // Walk edges...
+    WalkEdges(GEdge(points[0], points[1]), GEdge(points[0], p), paint);
+    WalkEdges(GEdge(points[1], points[2]), GEdge(p, points[2]), paint);
+  }
 };
 
 class GContextProxy : public GDeferredContext {
