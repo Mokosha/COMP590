@@ -189,7 +189,7 @@ class GDeferredContext : public GContext {
   }
 
   void drawXFormPixel(const uint32_t i, const uint32_t j,
-                      const GIRect &dstRect, const GRect &srcRect,
+                      const GRect &srcRect, const GIRect &dstRect,
                       const GBitmap &src, const GBitmap &dst,
                       const BlendFunc blend = blend_srcover) {
 
@@ -210,7 +210,7 @@ class GDeferredContext : public GContext {
   }
 
   void drawXFormPixelWithAlpha(const uint32_t i, const uint32_t j,
-                               const GIRect &dstRect, const GRect &srcRect,
+                               const GRect &srcRect, const GIRect &dstRect,
                                const GBitmap &src, const GBitmap &dst,
                                const uint8_t alpha,
                                const BlendFunc blend = blend_srcover) {

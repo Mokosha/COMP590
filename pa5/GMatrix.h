@@ -175,6 +175,35 @@ class GMatrixSquare : public GMatrix<T, N, N> {
 };
 
 template<typename T>
+class GMatrix2x2 : public GMatrixSquare<T, 3> {
+ public:
+  GMatrix2x2() : GMatrixSquare<T, 3>() { }
+
+  template<typename _T>
+  GMatrix2x2(const GMatrix<_T, 2, 2> &other) {
+    CopyFrom(other);
+  }
+
+  float Determinant() const {
+    const GMatrix2x2<T> &m = *this;
+    return m(0, 0) * m(1, 1) - m(1, 0) * m(0, 1);
+  }
+
+  bool Invert() {
+    float determinant = Determinant();
+    if(determinant == 0.0f)
+      return false;
+
+    GMatrix2x2<T> &m = *this;
+    float d = 1.0f / determinant;
+    std::swap(m(0, 0), m(1, 1));
+    m(0, 1) = -m(0, 1);
+    m(1, 0) = -m(1, 0);
+    m *= d;
+  }
+};
+
+template<typename T>
 class GMatrix3x3 : public GMatrixSquare<T, 3> {
  public:
   GMatrix3x3() : GMatrixSquare<T, 3>() { }
@@ -184,8 +213,8 @@ class GMatrix3x3 : public GMatrixSquare<T, 3> {
     CopyFrom(other);
   }
 
-  float Determinant() {
-    GMatrix3x3<T> &m = *this;
+  float Determinant() const {
+    const GMatrix3x3<T> &m = *this;
     return 0.0f
       + m(0, 0) * (m(1, 1) * m(2, 2) - m(2, 1) * m(1, 2))
       - m(0, 1) * (m(1, 0) * m(2, 2) - m(2, 0) * m(0, 2))
@@ -222,7 +251,7 @@ class GMatrix3x3 : public GMatrixSquare<T, 3> {
   }
 };
 
-typedef GMatrix3x3<float> GMatrix2x2f;
+typedef GMatrix2x2<float> GMatrix2x2f;
 typedef GMatrix3x3<float> GMatrix3x3f;
 
 #endif  // GMATRIX_H_
