@@ -247,7 +247,7 @@ class GDeferredContext : public GContext {
   void drawBitmapXForm(const GBitmap &bm, const GPaint &paint) {
     const GBitmap &ctxbm = GetInternalBitmap();
     GRect ctxRect = GRect::MakeXYWH(0, 0, ctxbm.width(), ctxbm.height());
-    GRect bmRect = GRect::MakeXYWH(0, 0, bm.width(), bm.height());
+    GIRect bmRect = GIRect::MakeXYWH(0, 0, bm.width(), bm.height());
     GRect pixelRect = GetTransformedBoundingBox(bmRect);
 
     GRect rect;

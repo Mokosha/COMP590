@@ -76,6 +76,15 @@ class GDeferredContext : public GContext {
     MultiplyCTM(m);
   }
 
+  virtual void rotate(float angle) {
+    GMatrix3x3f m;
+    float sa = sin(angle);
+    float ca = cos(angle);
+    m(0, 0) = ca; m(0, 1) = -sa;
+    m(1, 0) = sa; m(1, 1) = ca;
+    MultiplyCTM(m);
+  }
+
  private:
   void SetCTM(const GMatrix3x3f &m) {
     m_CTM = m;
@@ -247,7 +256,7 @@ class GDeferredContext : public GContext {
   void drawBitmapXForm(const GBitmap &bm, const GPaint &paint) {
     const GBitmap &ctxbm = GetInternalBitmap();
     GRect ctxRect = GRect::MakeXYWH(0, 0, ctxbm.width(), ctxbm.height());
-    GRect bmRect = GRect::MakeXYWH(0, 0, bm.width(), bm.height());
+    GIRect bmRect = GIRect::MakeXYWH(0, 0, bm.width(), bm.height());
     GRect pixelRect = GetTransformedBoundingBox(bmRect);
 
     GRect rect;
