@@ -3,12 +3,14 @@
 
 #include "GTypes.h"
 #include "GBlend.h"
+#include "GColor.h"
 #include "GMatrix.h"
 #include "GVector.h"
 
+#include <algorithm>
+
 // Forward declarations
 class GBitmap;
-class GColor;
 
 class GBlitter {
  protected:
@@ -31,10 +33,15 @@ class GConstBlitter : public GBlitter {
   virtual void blitRow(const GBitmap &dst, uint32_t startX, uint32_t endX, uint32_t y) const;
 };
 
-class GOpaqueBlitter : public GConstBlitter {
+class GOpaqueBlitter : public GBlitter {
+ private:
+  const GPixel m_Pixel;
+
  public:
-  GOpaqueBlitter(const GColor &color) : GConstBlitter(color, blend_src) { }
+  GOpaqueBlitter(const GColor &color);
   virtual ~GOpaqueBlitter() { }
+
+  virtual void blitRow(const GBitmap &dst, uint32_t startX, uint32_t endX, uint32_t y) const;
 };
 
 class GBitmapBlitter : public GBlitter { 
@@ -62,5 +69,31 @@ class GOBMBlitter : public GBlitter {
 
   virtual void blitRow(const GBitmap &dst, uint32_t startX, uint32_t endX, uint32_t y) const;
 };
+
+template<typename T>
+inline T Clamp(const T &v, const T &minVal, const T &maxVal) {
+  return ::std::max(::std::min(v, maxVal), minVal);
+}
+
+inline GColor ClampColor(const GColor &c) {
+  GColor r;
+  r.fA = Clamp(c.fA, 0.0f, 1.0f);
+  r.fR = Clamp(c.fR, 0.0f, 1.0f);
+  r.fG = Clamp(c.fG, 0.0f, 1.0f);
+  r.fB = Clamp(c.fB, 0.0f, 1.0f);
+  return r;
+}
+
+inline GPixel ColorToPixel(const GColor &c) {
+  GColor dc = ClampColor(c);
+  dc.fR *= dc.fA;
+  dc.fG *= dc.fA;
+  dc.fB *= dc.fA;
+
+  return GPixel_PackARGB(static_cast<unsigned>((dc.fA * 255.0f) + 0.5f),
+                         static_cast<unsigned>((dc.fR * 255.0f) + 0.5f),
+                         static_cast<unsigned>((dc.fG * 255.0f) + 0.5f),
+                         static_cast<unsigned>((dc.fB * 255.0f) + 0.5f));
+}
 
 #endif // GBLITTER_H_

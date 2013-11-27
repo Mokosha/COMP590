@@ -12,9 +12,10 @@
 #include "GColor.h"
 #include "GRect.h"
 
-template<typename T>
-inline T Clamp(const T &v, const T &minVal, const T &maxVal) {
-  return ::std::max(::std::min(v, maxVal), minVal);
+static void memsetPixel(GPixel *dst, GPixel v, uint32_t count) {
+  for(uint32_t i = 0; i < count; i++) {
+    dst[i] = v;
+  }
 }
 
 class GDeferredContext : public GContext {
@@ -30,6 +31,11 @@ class GDeferredContext : public GContext {
 
   virtual void clear(const GColor &c) {
     const GBitmap &bm = GetInternalBitmap();
+    if(bm.fRowBytes == bm.fWidth * 4) {
+      memsetPixel(bm.fPixels, ColorToPixel(c), bm.fWidth * bm.fHeight);
+      return;
+    }
+
     GRect rect = GRect::MakeWH(bm.fWidth, bm.fHeight);
     GOpaqueBlitter blitter(c);
     drawRawRect(rect, blitter);
@@ -86,20 +92,36 @@ class GDeferredContext : public GContext {
     m_ValidCTM = m_CTMInv.Invert();
   }
 
+  // Hackery
+  unsigned char m_BlitBuffer[32];
+  GBlitter *m_Blitter;
+
  protected:
   virtual const GBitmap &GetInternalBitmap() const = 0;
-
-  static void memsetPixel(GPixel *dst, GPixel v, uint32_t count) {
-    for(uint32_t i = 0; i < count; i++) {
-      dst[i] = v;
-    }
-  }
 
   static bool CheckSkew(const GMatrix3x3f &m) {
     if(m(0, 1) != 0 || m(1, 0) != 0) {
       return true;
     }
     return false;
+  }
+
+  // If the alpha value is above this value, then it will round to
+  // an opaque pixel during quantization.
+  static const float kOpaqueAlpha = (254.5f / 255.0f);
+  static const float kTransparentAlpha = (0.499999f / 255.0f);
+
+  // !FIXME! Just because alpha is opaque doesn't mean that there's
+  // no blending operation. This is restricted to the COMP590 assignment...
+  void SetBlitter(const GPaint &p, const EBlendOp op = eBlendOp_SrcOver) {
+    float alpha = p.getAlpha();
+    if(alpha > kOpaqueAlpha) {
+      m_Blitter = new (m_BlitBuffer) GOpaqueBlitter(p.getColor());
+      GASSERT(sizeof(GOpaqueBlitter) < 32);
+    }
+
+    m_Blitter = new (m_BlitBuffer) GConstBlitter(p.getColor(), GetBlendFunc(op));
+    GASSERT(sizeof(GConstBlitter) < 32);
   }
 
   GPoint Vert2Point(const GVec3f &vert) {
@@ -148,11 +170,6 @@ class GDeferredContext : public GContext {
     }
   }
 
-  // If the alpha value is above this value, then it will round to
-  // an opaque pixel during quantization.
-  static const float kOpaqueAlpha = (254.5f / 255.0f);
-  static const float kTransparentAlpha = (0.499999f / 255.0f);
-
   void drawBitmap(const GBitmap &bm, float x, float y, const GPaint &paint) {
 
     float alpha = paint.getAlpha();
@@ -197,13 +214,12 @@ class GDeferredContext : public GContext {
     // If the alpha value is above this value, then it will round to
     // an opaque pixel during quantization.
     float alpha = p.getAlpha();
-    BlendFunc blend = GetBlendFunc(eBlendOp_SrcOver);
-    if(alpha >= kOpaqueAlpha) {
-      blend = GetBlendFunc(eBlendOp_Src);
+    if(alpha <= kTransparentAlpha) {
+      return;
     }
 
-    GConstBlitter blitter (p.getColor(), blend);
-    drawRectWithBlitter(rect, blitter);
+    SetBlitter(p);
+    drawRectWithBlitter(rect, *m_Blitter);
   }
 
   static bool ComputeLine(const GPoint &p1, const GPoint &p2, float &m, float &b) {
@@ -301,8 +317,8 @@ class GDeferredContext : public GContext {
   }
 
   void drawTriangle(const GPoint vertices[3], const GPaint &paint) {
-    GConstBlitter blitter(paint.getColor(), GetBlendFunc(eBlendOp_SrcOver));
-    drawTriangleWithBlitter(vertices, blitter);
+    SetBlitter(paint);
+    drawTriangleWithBlitter(vertices, *m_Blitter);
   }
 
   void drawTriangleWithBlitter(const GPoint vertices[3], const GBlitter &blitter) {
