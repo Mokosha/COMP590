@@ -3,6 +3,8 @@
 
 #include "GVector.h"
 
+#include <algorithm>
+
 template<typename T, const int nRows, const int nCols>
 class GMatrix {
  protected:
@@ -37,7 +39,7 @@ class GMatrix {
   template<typename _T>
   GMatrix<T, nRows, nCols> operator+(
     const GMatrix<_T, nRows, nCols> &m
-  ) {
+  ) const {
     GMatrix<T, nRows, nCols> a;
     for(int i = 0; i < kNumElements; i++) {
       a[i] = mat[i] + m[i];
@@ -58,7 +60,7 @@ class GMatrix {
   template<typename _T>
   GMatrix<T, nRows, nCols> operator-(
     const GMatrix<_T, nRows, nCols> &m
-  ) {
+  ) const {
     GMatrix<T, nRows, nCols> a;
     for(int i = 0; i < kNumElements; i++) {
       a[i] = mat[i] - m[i];
@@ -76,7 +78,7 @@ class GMatrix {
     return *this;
   }
 
-  GMatrix<T, nRows, nCols> operator*(T s) {
+  GMatrix<T, nRows, nCols> operator*(T s) const {
     GMatrix<T, nRows, nCols> a;
     for(int i = 0; i < kNumElements; i++) {
       a[i] = mat[i] * s;
@@ -91,7 +93,7 @@ class GMatrix {
     return *this;
   }
 
-  GMatrix<T, nRows, nCols> operator/(T s) {
+  GMatrix<T, nRows, nCols> operator/(T s) const {
     GMatrix<T, nRows, nCols> a;
     for(int i = 0; i < kNumElements; i++) {
       a[i] = mat[i] / s;
@@ -110,7 +112,7 @@ class GMatrix {
   template<typename _T, const int nTarget>
   GMatrix<T, nRows, nTarget> operator*(
     const GMatrix<_T, nCols, nTarget> &m
-  ) {
+  ) const {
     GMatrix<T, nRows, nTarget> result;
     for(int r = 0; r < nRows; r++)
     for(int c = 0; c < nTarget; c++) {
@@ -132,7 +134,7 @@ class GMatrix {
 
   // Vector multiplication
   template<typename _T>
-  GVector<T, nCols> operator*(const GVector<_T, nCols> &v) {
+  GVector<T, nCols> operator*(const GVector<_T, nCols> &v) const {
     GVector<T, nCols> result;
     for(int r = 0; r < nRows; r++) {
       result(r) = 0;
