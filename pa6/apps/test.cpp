@@ -598,7 +598,7 @@ static const char* test_scaletofit_bitmaps(Stats* stats) {
     
     // give us room for a pixel of slop around the edge
     AutoBitmap origDst(W + 2, H + 2);
-    bzero(origDst.fPixels, origDst.fHeight * origDst.fRowBytes);
+    memset(origDst.fPixels, 0, origDst.fHeight * origDst.fRowBytes);
     const GPixel clearPixel = 0;
     
     GBitmap dst;
