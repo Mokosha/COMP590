@@ -30,13 +30,9 @@ class GDeferredContext : public GContext {
 
   virtual void clear(const GColor &c) {
     const GBitmap &bm = GetInternalBitmap();
-    GPaint p; p.setColor(c);
-    save();
-    SetCTM(GMatrix3x3f());
     GRect rect = GRect::MakeWH(bm.fWidth, bm.fHeight);
     GOpaqueBlitter blitter(c);
-    drawRectWithBlitter(rect, blitter);
-    restore();
+    drawRawRect(rect, blitter);
   }
 
  protected:
@@ -106,6 +102,52 @@ class GDeferredContext : public GContext {
     return false;
   }
 
+  GPoint Vert2Point(const GVec3f &vert) {
+    GPoint ret;
+    ret.set(vert[0] / vert[2], vert[1] / vert[2]);
+    return ret;
+  }
+
+  GVec3f Point2Vert(const GPoint &p) {
+    return GVec3f(p.fX, p.fY, 1.0f);
+  }
+
+  GRect AddPoint(const GRect &rect, const GVec3f &v) {
+    GRect ret;
+    ret.fLeft = std::min(rect.fLeft, v[0]);
+    ret.fRight = std::max(rect.fRight, v[0]);
+    ret.fTop = std::min(rect.fTop, v[1]);
+    ret.fBottom = std::max(rect.fBottom, v[1]);
+    return ret;
+  }
+
+  GRect TransformRect(const GRect &rect) {
+    GPoint verts[4];
+    rect.toQuad(verts);
+
+    GVec3f v = m_CTM * Point2Vert(verts[0]);
+    GRect ret = GRect::MakeLTRB(v[0], v[1], v[0], v[1]);
+    for(uint32_t i = 1; i < 4; i++) {
+      ret = AddPoint(ret, m_CTM * Point2Vert(verts[i]));
+    }
+    return ret;
+  }
+
+  void drawRawRect(const GRect &rect, const GBlitter &blitter) {
+    const GBitmap &ctxbm = GetInternalBitmap();
+    const GIRect ctxRect = GIRect::MakeWH(ctxbm.width(), ctxbm.height());
+
+    GRect dst;
+    if(!dst.setIntersection(GRect(ctxRect), rect)) {
+      return;
+    }
+
+    GIRect dstRect = dst.round();
+    for(uint32_t y = dstRect.fTop; y < dstRect.fBottom; y++) {
+      blitter.blitRow(ctxbm, dstRect.fLeft, dstRect.fRight, y);
+    }
+  }
+
   // If the alpha value is above this value, then it will round to
   // an opaque pixel during quantization.
   static const float kOpaqueAlpha = (254.5f / 255.0f);
@@ -133,6 +175,13 @@ class GDeferredContext : public GContext {
   }
 
   void drawRectWithBlitter(const GRect &rect, const GBlitter &blitter) {
+
+    if(!CheckSkew(m_CTM)) {
+      GRect xform = TransformRect(rect);
+      drawRawRect(xform, blitter);
+      return;
+    }
+
     GPoint vertices[4];
     vertices[0].set(rect.fLeft, rect.fTop);
     vertices[1].set(rect.fRight, rect.fTop);
@@ -155,12 +204,6 @@ class GDeferredContext : public GContext {
 
     GConstBlitter blitter (p.getColor(), blend);
     drawRectWithBlitter(rect, blitter);
-  }
-
-  GPoint Vert2Point(const GVec3f &vert) {
-    GPoint ret;
-    ret.set(vert[0] / vert[2], vert[1] / vert[2]);
-    return ret;
   }
 
   static bool ComputeLine(const GPoint &p1, const GPoint &p2, float &m, float &b) {
