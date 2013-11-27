@@ -161,7 +161,7 @@ class GMatrixSquare : public GMatrix<T, N, N> {
   }
   template<typename _T>
   GMatrixSquare(const GMatrix<_T, N, N> &other) {
-    CopyFrom(other);
+    this->CopyFrom(other);
   }
 
   void Identity() {
@@ -183,7 +183,7 @@ class GMatrix2x2 : public GMatrixSquare<T, 3> {
 
   template<typename _T>
   GMatrix2x2(const GMatrix<_T, 2, 2> &other) {
-    CopyFrom(other);
+    this->CopyFrom(other);
   }
 
   float Determinant() const {
@@ -212,7 +212,7 @@ class GMatrix3x3 : public GMatrixSquare<T, 3> {
 
   template<typename _T>
   GMatrix3x3(const GMatrix<_T, 3, 3> &other) {
-    CopyFrom(other);
+    this->CopyFrom(other);
   }
 
   float Determinant() const {
