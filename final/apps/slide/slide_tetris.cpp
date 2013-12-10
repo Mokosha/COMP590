@@ -248,9 +248,8 @@ class Board {
       ClearLines();
     } else {
       if(!HasControlled()) {
-        // int r = m_Random.nextRange(0, kNumBlockTypes-1);
-        // NewPiece((EBlockType)r);
-        NewPiece(eBlockType_Square);
+        int r = m_Random.nextRange(0, kNumBlockTypes-1);
+        NewPiece((EBlockType)r);
       } else {
         Uncontrol();
       }
