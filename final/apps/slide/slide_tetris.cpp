@@ -20,23 +20,60 @@ enum EBlockType {
   eBlockType_T,
   eBlockType_LeftS,
   eBlockType_RightS,
+  eBlockType_LeftL,
+  eBlockType_RightL,
 
   kNumBlockTypes
 };
 
 // Offsets from center
-static const uint32_t kBlockShape[kNumBlockTypes][4][2] = {
+static const int32_t kBlockShape[kNumBlockTypes][4][2] = {
   { {-1, 0}, {0, 0}, {1, 0}, {2, 0} }, // eBlockType_Stick
   { {0, 0}, {1, 0}, {0, -1}, {1, -1} }, // eBlockType_Square
   { {-1, 0}, {0, 0}, {1, 0}, {0, -1} }, // eBlockType_T
   { {-1, 0}, {0, 0}, {0, -1}, {1, -1} }, // eBlockType_LeftS
-  { {0, 0}, {1, 0}, {0, -1}, {-1, -1} } // eBlockType_RightS
+  { {0, 0}, {1, 0}, {0, -1}, {-1, -1} }, // eBlockType_RightS
+  { {0, 0}, {1, 0}, {0, 1}, {2, 0} }, // eBlockType_LeftL
+  { {0, 0}, {1, 0}, {0, -1}, {0, -2} } // eBlockType_RightL
 };
 
-static const uint32_t kBoardSzX = 10;
-static const uint32_t kBoardSzY = 50;
+void CheckBlockShape(EBlockType ty) {
+  // Check for valid enum
+  switch(ty) {
+  case eBlockType_Stick: break;
+  case eBlockType_Square: break;
+  case eBlockType_T: break; 
+  case eBlockType_LeftS: break;
+  case eBlockType_RightS: break;
+  case eBlockType_LeftL: break;
+  case eBlockType_RightL: break;
 
-static const uint32_t kPlayAreaX = 180;
+  default:
+    assert(!"Unrecognized piece type!");
+  }
+}
+
+void GetRotated(EBlockType ty, int32_t ret[4][2], const uint32_t rot) {
+  CheckBlockShape(ty);
+
+  memcpy(ret, kBlockShape[ty], 4 * 2 * sizeof(uint32_t));
+
+  if(ty == eBlockType_Square)
+    return;
+
+  for(uint32_t i = 0; i < (rot % 4); i++) {
+    for(uint32_t j = 0; j < 4; j++) {
+      uint32_t t = ret[j][0];
+      ret[j][0] = ret[j][1];
+      ret[j][1] = -t;
+    }
+  }
+}
+
+static const uint32_t kBoardSzX = 10;
+static const uint32_t kBoardSzY = 30;
+
+static const uint32_t kPlayAreaX = 150;
 static const uint32_t kPlayAreaY = 450;
 
 static const uint32_t kScreenSizeX = 640;
@@ -66,6 +103,12 @@ static inline uint32_t tileSzY() {
   return kPlayAreaY / kBoardSzY;
 }
 
+static inline bool InBounds(int32_t x, int32_t y) {
+  return x >= 0 && x < kBoardSzX && y >= 0 && y < kBoardSzY;
+}
+
+static const GColor kBlack = GColor::Make(1, 0, 0, 0);
+
 class Tile {
 private:
   GColor m_Color;
@@ -84,14 +127,24 @@ public:
 
     uint32_t tx = playStartX() + x * tileSzX();
     uint32_t ty = playEndY() - (y+1) * tileSzY();
-    GIRect tile = GIRect::MakeLTRB(tx, ty, tx + tileSzX(), ty + tileSzY());
+
+    GRect tile = GRect::MakeLTRB(2.0f, 2.0f, tileSzX()-4.0f, tileSzY()-4.0f);
+    GRect outline = GRect::MakeLTRB(0, 0, tileSzX(), tileSzY());
+
+    ctx->save();
+    ctx->translate(tx, ty);
+    
     GPaint paint;
+    paint.setColor(kBlack);
+    ctx->drawRect(outline, paint);
+
     paint.setColor(m_Color);
     ctx->drawRect(tile, paint);
+    ctx->restore();
   }
 
   bool Center() const { return m_IsCenter; }
-  void SetCenter() { m_IsCenter = true; }
+  void SetCenter(bool flag = true) { m_IsCenter = flag; }
   bool Exists() const { return m_Exists; }
   void Destroy() { m_Exists = false; m_IsCenter = false; }
   void Relenquish() { m_Controlled = false; m_IsCenter = false; }
@@ -100,6 +153,7 @@ public:
 
 class Board {
   EBlockType m_CurrentType;
+  uint32_t m_Rotation;
   GRandom m_Random;
   Tile m_Board[kBoardSzX][kBoardSzY];
 
@@ -179,9 +233,8 @@ class Board {
         for(uint32_t x = 0; x < kBoardSzX; x++) {
           m_Board[x][y].Destroy();
         }
-      }
-
-      if(y > 0) {
+        continue;
+      } else {
         for(uint32_t x = 0; x < kBoardSzX; x++) {
           for(uint32_t i = 0; i < drop; i++) {
             Drop(x, y-i);
@@ -197,43 +250,103 @@ class Board {
 
   bool NewPiece(EBlockType ty) {
 
-    // Check for valid enum
-    switch(ty) {
-    case eBlockType_Stick: break;
-    case eBlockType_Square: break;
-    case eBlockType_T: break; 
-    case eBlockType_LeftS: break;
-    case eBlockType_RightS: break;
+    CheckBlockShape(ty);
 
-    default:
-      assert(!"Unrecognized piece type!");
-    }
+    int32_t cenX = kBoardSzX >> 1;
+    int32_t cenY = kBoardSzY - 1;
+    bool fits;
+    for(uint32_t tries = 0; tries < 3; tries++) {
+      fits = true;
+      if(tries > 0)
+        cenY--;
 
-    uint32_t cenX = 4;
-    uint32_t cenY = 49;
-    bool safe = true;
-    for(uint32_t i = 0; i < 4; i++) {
-      uint32_t x = cenX + kBlockShape[ty][i][0];
-      uint32_t y = cenY + kBlockShape[ty][i][1];
+      for(uint32_t i = 0; i < 4; i++) {
+        int32_t x = cenX + kBlockShape[ty][i][0];
+        int32_t y = cenY + kBlockShape[ty][i][1];
 
-      if(m_Board[x][y].Exists()) {
-        safe = false;
-        break;
+        fits = fits && InBounds(x, y);
+        fits = fits && !m_Board[x][y].Exists();
       }
+
+      if(fits)
+        break;
     }
 
-    if(!safe)
+    if(!fits)
       return false;
 
     GColor c = RandColor();
     for(uint32_t i = 0; i < 4; i++) {
-      uint32_t x = cenX + kBlockShape[ty][i][0];
-      uint32_t y = cenY + kBlockShape[ty][i][1];
-
+      int32_t x = cenX + kBlockShape[ty][i][0];
+      int32_t y = cenY + kBlockShape[ty][i][1];
       m_Board[x][y] = Tile(c);
     }
     m_Board[cenX][cenY].SetCenter();
+    m_CurrentType = ty;
+    m_Rotation = 0;
     return true;
+  }
+
+  void ResetBoard() {
+    for(uint32_t x = 0; x < kBoardSzX; x++) {
+      for(uint32_t y = 0; y < kBoardSzY; y++) {
+        m_Board[x][y].Destroy();
+      }
+    }
+  }
+
+  void RotateTo(uint32_t newRot) {
+    uint32_t r = newRot % 4;
+    int32_t rshape[4][2];
+    GetRotated(m_CurrentType, rshape, r);
+
+    int32_t cenX = 0;
+    int32_t cenY = 0;
+    bool bFoundCenter = false;
+    for(int32_t x = 0; x < kBoardSzX; x++) {
+      for(int32_t y = 0; y < kBoardSzY; y++) {
+        if(m_Board[x][y].Center()) {
+          cenX = x;
+          cenY = y;
+          bFoundCenter = true;
+        }
+      }
+    }
+
+    assert(bFoundCenter);
+
+    bool bRotationAvailable = true;
+    for(uint32_t i = 0; i < 4; i++) {
+      int32_t x = cenX + rshape[i][0];
+      int32_t y = cenY + rshape[i][1];
+
+      if(!InBounds(x, y) || (m_Board[x][y].Exists() && !m_Board[x][y].Controlled())) {
+        bRotationAvailable = false;
+      }
+    }
+
+    if(!bRotationAvailable)
+      return;
+    
+    Tile center = m_Board[cenX][cenY];
+    center.SetCenter(false);
+
+    // Clear controlled pieces...
+    for(uint32_t x = 0; x < kBoardSzX; x++) {
+      for(uint32_t y = 0; y < kBoardSzY; y++) {
+        if(m_Board[x][y].Controlled()) {
+          m_Board[x][y].Destroy();
+        }
+      }
+    }
+
+    // Assign new shape
+    for(uint32_t i = 0; i < 4; i++) {
+      m_Board[cenX + rshape[i][0]][cenY + rshape[i][1]] = center;
+    }
+
+    m_Board[cenX][cenY].SetCenter(true);
+    m_Rotation = r;
   }
 
  public:
@@ -245,15 +358,17 @@ class Board {
     // Move all of the controlled blocks down.
     if(bMoveDown) {
       DropControlled();
-      ClearLines();
     } else {
       if(!HasControlled()) {
         int r = m_Random.nextRange(0, kNumBlockTypes-1);
-        NewPiece((EBlockType)r);
+        if(!NewPiece((EBlockType)r)) {
+          ResetBoard();
+        }
       } else {
         Uncontrol();
       }
     }
+    ClearLines();
   }
 
   void Draw(GContext *ctx) {
@@ -267,7 +382,6 @@ class Board {
   void MoveDown() {
     if(NeedsMoveDown()) {
       DropControlled();
-      ClearLines();
     }
   }
 
@@ -334,7 +448,7 @@ class Board {
   }
 
   void Rotate() {
-    
+    RotateTo(1+m_Rotation);
   }
 
   Board(const GRandom &rnd) : m_Random(rnd) { }
